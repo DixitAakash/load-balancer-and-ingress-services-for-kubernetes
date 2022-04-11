@@ -16,6 +16,7 @@ package lib
 
 import (
 	"context"
+	"os"
 	"sort"
 	"strings"
 
@@ -38,6 +39,10 @@ import (
 	advl4crd "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/third_party/service-apis/client/clientset/versioned"
 	advl4informer "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/third_party/service-apis/client/informers/externalversions/apis/v1alpha1pre1"
 )
+
+func init() {
+
+}
 
 type AdvL4Informers struct {
 	GatewayInformer      advl4informer.GatewayInformer
@@ -109,18 +114,24 @@ type akoControlConfig struct {
 	licenseType string
 
 	// primaryaAKO is set to true/false if as per primaryaAKO value
-	//in values.yaml
+	// in values.yaml
 	primaryaAKO bool
 
 	//blockedNS contains map of blocked namespaces and checksum of it
 	blockedNS BlockedNamespaces
+
+	// controllerVersion stores the version of the controller to
+	// which AKO is communicating with
+	controllerVersion string
 }
 
 var akoControlConfigInstance *akoControlConfig
 
 func AKOControlConfig() *akoControlConfig {
 	if akoControlConfigInstance == nil {
-		akoControlConfigInstance = &akoControlConfig{}
+		akoControlConfigInstance = &akoControlConfig{
+			controllerVersion: os.Getenv("CTRL_VERSION"),
+		}
 	}
 	return akoControlConfigInstance
 }
@@ -128,6 +139,7 @@ func AKOControlConfig() *akoControlConfig {
 func (c *akoControlConfig) SetAKOInstanceFlag(flag bool) {
 	c.primaryaAKO = flag
 }
+
 func (c *akoControlConfig) GetAKOInstanceFlag() bool {
 	return c.primaryaAKO
 }
@@ -228,6 +240,10 @@ func (c *akoControlConfig) HostRuleEnabled() bool {
 
 func (c *akoControlConfig) HttpRuleEnabled() bool {
 	return c.httpRuleEnabled
+}
+
+func (c *akoControlConfig) ControllerVersion() string {
+	return c.controllerVersion
 }
 
 func (c *akoControlConfig) SetIstioClientset(cs istiocrd.Interface) {
