@@ -618,12 +618,11 @@ func (c *AviController) SetupEventHandlers(k8sinfo K8sinformers) {
 			var key string
 			if isSvcLb && !lib.GetLayer7Only() {
 				//L4 Namespace sync not applicable for advance L4 and service API
-				key = utils.L4LBService + "/" + utils.ObjKey(svc)
-				if lib.IsNamespaceBlocked(namespace) || !utils.IsServiceNSValid(namespace) {
-					utils.AviLog.Debugf("key: %s, msg: L4 Service add event: Namespace: %s didn't qualify filter. Not adding service.", key, namespace)
+				if !utils.IsServiceNSValid(namespace) {
+					utils.AviLog.Infof("L4 Service add event: Namespace: %s didn't qualify filter. Not adding service.", namespace)
 					return
 				}
-
+				key = utils.L4LBService + "/" + utils.ObjKey(svc)
 				if lib.GetAdvancedL4() {
 					checkSvcForGatewayPortConflict(svc, key)
 				}
