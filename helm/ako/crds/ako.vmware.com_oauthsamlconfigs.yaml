@@ -47,7 +47,7 @@ spec:
                     maximum: 1440
                     minimum: 1
                     type: integer
-                  logoutUri:
+                  logoutURI:
                     description: URI which triggers OAuth logout.
                     type: string
                   oauthSettings:
@@ -146,10 +146,10 @@ spec:
                       - authProfileRef
                       type: object
                     type: array
-                  postLogoutRedirectUri:
+                  postLogoutRedirectURI:
                     description: URI to which IDP will redirect to after the logout.
                     type: string
-                  redirectUri:
+                  redirectURI:
                     description: Redirect URI specified in the request to Authorization
                       Server.
                     type: string
@@ -180,7 +180,7 @@ spec:
                     maximum: 1440
                     minimum: 1
                     type: integer
-                  entityId:
+                  entityID:
                     description: Globally unique SAML entityID for this node. The
                       SAML application entity ID on the IDP should match this.
                     type: string
@@ -188,7 +188,7 @@ spec:
                     description: SP will use this SSL certificate to sign requests
                       going to the IdP and decrypt the assertions coming from IdP.
                     type: string
-                  singleSignonUrl:
+                  singleSignonURL:
                     description: SAML Single Signon endpoint to receive the Authentication
                       response. This also specifies the destination endpoint to be
                       configured for this application on the IDP. If the authn_req_acs_type
@@ -203,8 +203,8 @@ spec:
                     type: boolean
                 required:
                 - authnReqAcsType
-                - entityId
-                - singleSignonUrl
+                - entityID
+                - singleSignonURL
                 type: object
               ssoPolicyRef:
                 description: The SSO Policy attached to the virtualservice.

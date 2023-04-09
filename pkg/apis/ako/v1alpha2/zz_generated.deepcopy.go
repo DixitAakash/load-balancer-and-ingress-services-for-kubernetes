@@ -597,8 +597,8 @@ func (in *OAuthVSConfig) DeepCopyInto(out *OAuthVSConfig) {
 		*out = new(int32)
 		**out = **in
 	}
-	if in.LogoutUri != nil {
-		in, out := &in.LogoutUri, &out.LogoutUri
+	if in.LogoutURI != nil {
+		in, out := &in.LogoutURI, &out.LogoutURI
 		*out = new(string)
 		**out = **in
 	}
@@ -613,13 +613,13 @@ func (in *OAuthVSConfig) DeepCopyInto(out *OAuthVSConfig) {
 			}
 		}
 	}
-	if in.PostLogoutRedirectUri != nil {
-		in, out := &in.PostLogoutRedirectUri, &out.PostLogoutRedirectUri
+	if in.PostLogoutRedirectURI != nil {
+		in, out := &in.PostLogoutRedirectURI, &out.PostLogoutRedirectURI
 		*out = new(string)
 		**out = **in
 	}
-	if in.RedirectUri != nil {
-		in, out := &in.RedirectUri, &out.RedirectUri
+	if in.RedirectURI != nil {
+		in, out := &in.RedirectURI, &out.RedirectURI
 		*out = new(string)
 		**out = **in
 	}
@@ -737,8 +737,8 @@ func (in *SAMLSPConfig) DeepCopyInto(out *SAMLSPConfig) {
 		*out = new(int32)
 		**out = **in
 	}
-	if in.EntityId != nil {
-		in, out := &in.EntityId, &out.EntityId
+	if in.EntityID != nil {
+		in, out := &in.EntityID, &out.EntityID
 		*out = new(string)
 		**out = **in
 	}
@@ -747,8 +747,8 @@ func (in *SAMLSPConfig) DeepCopyInto(out *SAMLSPConfig) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.SingleSignonUrl != nil {
-		in, out := &in.SingleSignonUrl, &out.SingleSignonUrl
+	if in.SingleSignonURL != nil {
+		in, out := &in.SingleSignonURL, &out.SingleSignonURL
 		*out = new(string)
 		**out = **in
 	}

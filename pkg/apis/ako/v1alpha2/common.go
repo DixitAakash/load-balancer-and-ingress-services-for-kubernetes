@@ -74,10 +74,10 @@ type OAuthSettings struct {
 type OAuthVSConfig struct {
 	CookieName            *string          `json:"cookieName,omitempty"`
 	CookieTimeout         *int32           `json:"cookieTimeout,omitempty"`
-	LogoutUri             *string          `json:"logoutUri,omitempty"`
+	LogoutURI             *string          `json:"logoutURI,omitempty"`
 	OauthSettings         []*OAuthSettings `json:"oauthSettings,omitempty"`
-	PostLogoutRedirectUri *string          `json:"postLogoutRedirectUri,omitempty"`
-	RedirectUri           *string          `json:"redirectUri,omitempty"`
+	PostLogoutRedirectURI *string          `json:"postLogoutRedirectURI,omitempty"`
+	RedirectURI           *string          `json:"redirectURI,omitempty"`
 }
 
 type OIDCConfig struct {
@@ -100,9 +100,9 @@ type SAMLSPConfig struct {
 	AuthnReqAcsType                *string `json:"authnReqAcsType"`
 	CookieName                     *string `json:"cookieName,omitempty"`
 	CookieTimeout                  *int32  `json:"cookieTimeout,omitempty"`
-	EntityId                       *string `json:"entityId"`
+	EntityID                       *string `json:"entityID"`
 	SigningSslKeyAndCertificateRef *string `json:"signingSslKeyAndCertificateRef,omitempty"`
-	SingleSignonUrl                *string `json:"singleSignonUrl"`
+	SingleSignonURL                *string `json:"singleSignonURL"`
 	UseIdpSessionTimeout           *bool   `json:"useIdpSessionTimeout,omitempty"`
 }
 
