@@ -52,7 +52,7 @@ type JWTValidationParams struct {
 }
 
 type OAuthAppSettings struct {
-	ClientId     *string     `json:"clientId"`
+	ClientID     *string     `json:"clientID"`
 	ClientSecret *string     `json:"clientSecret"`
 	OidcConfig   *OIDCConfig `json:"oidcConfig,omitempty"`
 	Scopes       []string    `json:"scopes,omitempty"`
@@ -87,7 +87,7 @@ type OIDCConfig struct {
 }
 
 type OpaqueTokenValidationParams struct {
-	ServerId     *string `json:"serverId"`
+	ServerID     *string `json:"serverID"`
 	ServerSecret *string `json:"serverSecret"`
 }
 

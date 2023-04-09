@@ -387,6 +387,8 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
 
 	if !deleteCase {
 		copier.Copy(vsNode, &oauthSamlConfig.Spec)
+		vsNode.AviVsNodeCommonFields.ConvertToRef()
+		vsNode.AviVsNodeGeneratedFields.ConvertToRef()
 		if oauthSamlConfig.Spec.OauthVsConfig != nil {
 			if len(oauthSamlConfig.Spec.OauthVsConfig.OauthSettings) != 0 {
 				for i, oauthSetting := range oauthSamlConfig.Spec.OauthVsConfig.OauthSettings {
@@ -415,9 +417,6 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
 			}
 		}
 		//if oauthSamlConfig.Spec.SAMLSPConfig != nil {
-
-		vsNode.AviVsNodeCommonFields.ConvertToRef()
-		vsNode.AviVsNodeGeneratedFields.ConvertToRef()
 
 		crdStatus = lib.CRDMetadata{
 			Type:   "OAuthSamlConfig",

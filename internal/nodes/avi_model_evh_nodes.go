@@ -675,6 +675,7 @@ func (v *AviEvhVsNode) CalculateCheckSum() {
 		checksum += lib.GetAnalyticsPolicyChecksum(v.AnalyticsPolicy)
 	}
 
+	checksum += v.CalculateCheckSumOfGeneratedCode()
 	v.CloudConfigCksum = checksum
 }
 

@@ -498,7 +498,7 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 
 	refData := make(map[string]string)
 
-	if oauthSamlConfig.Spec.SsoPolicyRef != nil {
+	if oauthSamlConfig.Spec.SsoPolicyRef == nil {
 		err = fmt.Errorf("SsoPolicyRef is not specified")
 		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 		return err

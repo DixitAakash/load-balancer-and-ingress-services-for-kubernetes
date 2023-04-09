@@ -92,6 +92,55 @@ func (v *AviVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
 	return checksum
 }
 
+func (v *AviEvhVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
+	checksumStringSlice := make([]string, 0, 12)
+	if v.DelayFairness != nil {
+		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.DelayFairness))
+	}
+
+	if v.Fqdn != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.Fqdn)
+	}
+
+	if v.NetworkProfileRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.NetworkProfileRef)
+	}
+
+	if v.NetworkSecurityPolicyRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.NetworkSecurityPolicyRef)
+	}
+
+	if v.OauthVsConfig != nil {
+		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.OauthVsConfig))
+	}
+
+	if v.PoolRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.PoolRef)
+	}
+
+	if v.SamlSpConfig != nil {
+		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.SamlSpConfig))
+	}
+
+	if v.SecurityPolicyRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.SecurityPolicyRef)
+	}
+
+	if v.ServerNetworkProfileRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.ServerNetworkProfileRef)
+	}
+
+	checksumStringSlice = append(checksumStringSlice, v.SslKeyAndCertificateRefs...)
+
+	if v.SsoPolicyRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.SsoPolicyRef)
+	}
+
+	chksumStr := strings.Join(checksumStringSlice, delim)
+	checksum := utils.Hash(chksumStr)
+	return checksum
+}
+
 func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 	if o != nil {
 		if o.NetworkProfileRef != nil {
@@ -101,8 +150,6 @@ func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 			o.NetworkSecurityPolicyRef = proto.String("/api/networksecuritypolicy?name=" + *o.NetworkSecurityPolicyRef)
 		}
 		for ii := range o.OauthVsConfig.OauthSettings {
-			/*for iiii := range o.OauthVsConfig.OauthSettings[ii].AppSettings.Scopes {
-			}*/
 			if o.OauthVsConfig.OauthSettings[ii].AuthProfileRef != nil {
 				o.OauthVsConfig.OauthSettings[ii].AuthProfileRef = proto.String("/api/authprofile?name=" + *o.OauthVsConfig.OauthSettings[ii].AuthProfileRef)
 			}

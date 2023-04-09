@@ -57,7 +57,7 @@ spec:
                         appSettings:
                           description: Application-specific OAuth config.
                           properties:
-                            clientId:
+                            clientID:
                               description: Application specific identifier.
                               type: string
                             clientSecret:
@@ -89,7 +89,7 @@ spec:
                                 type: string
                               type: array
                           required:
-                          - clientId
+                          - clientID
                           - clientSecret
                           type: object
                         authProfileRef:
@@ -125,7 +125,7 @@ spec:
                               description: Validation parameters to be used when access
                                 token type is opaque.
                               properties:
-                                serverId:
+                                serverID:
                                   description: Resource server specific identifier
                                     used to validate against introspection endpoint
                                     when access token is opaque.
@@ -136,7 +136,7 @@ spec:
                                     in 'serverSecret' data field
                                   type: string
                               required:
-                              - serverId
+                              - serverID
                               - serverSecret
                               type: object
                           required:
