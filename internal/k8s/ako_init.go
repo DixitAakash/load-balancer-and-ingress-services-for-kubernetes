@@ -1014,6 +1014,24 @@ func (c *AviController) FullSyncK8s(sync bool) error {
 			}
 		}
 
+		oauthSamlConfigObjs, err := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(metav1.NamespaceAll).List(labels.Set(nil).AsSelector())
+		if err != nil {
+			utils.AviLog.Errorf("Unable to retrieve the oauthSamlConfigs during full sync: %s", err)
+		} else {
+			for _, oauthSamlConfigObj := range oauthSamlConfigObjs {
+				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfigObj)
+				meta, err := meta.Accessor(oauthSamlConfigObj)
+				if err == nil {
+					resVer := meta.GetResourceVersion()
+					objects.SharedResourceVerInstanceLister().Save(key, resVer)
+				}
+				if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfigObj); err != nil {
+					utils.AviLog.Warnf("key: %s, Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+				}
+				nodes.DequeueIngestion(key, true)
+			}
+		}
+
 		// IngressClass Section
 		if utils.GetInformers().IngressClassInformer != nil {
 			ingClassObjs, err := utils.GetInformers().IngressClassInformer.Lister().List(labels.Set(nil).AsSelector())

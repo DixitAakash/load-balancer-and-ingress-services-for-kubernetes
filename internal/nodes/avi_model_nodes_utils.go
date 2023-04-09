@@ -23,25 +23,34 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	// avimodels "github.com/vmware/alb-sdk/go/models"
+
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 )
 
-
 type AviVsNodeGeneratedFields struct {
 	DelayFairness            *bool
+	Fqdn                     *string
 	NetworkProfileRef        *string
 	NetworkSecurityPolicyRef *string
+	OauthVsConfig            *v1alpha2.OAuthVSConfig
 	PoolRef                  *string
+	SamlSpConfig             *v1alpha2.SAMLSPConfig
 	SecurityPolicyRef        *string
 	ServerNetworkProfileRef  *string
 	SslKeyAndCertificateRefs []string
+	SsoPolicyRef             *string
 }
 
 func (v *AviVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
-	checksumStringSlice := make([]string, 0, 8)
+	checksumStringSlice := make([]string, 0, 12)
 	if v.DelayFairness != nil {
 		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.DelayFairness))
+	}
+
+	if v.Fqdn != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.Fqdn)
 	}
 
 	if v.NetworkProfileRef != nil {
@@ -52,8 +61,16 @@ func (v *AviVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
 		checksumStringSlice = append(checksumStringSlice, *v.NetworkSecurityPolicyRef)
 	}
 
+	if v.OauthVsConfig != nil {
+		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.OauthVsConfig))
+	}
+
 	if v.PoolRef != nil {
 		checksumStringSlice = append(checksumStringSlice, *v.PoolRef)
+	}
+
+	if v.SamlSpConfig != nil {
+		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.SamlSpConfig))
 	}
 
 	if v.SecurityPolicyRef != nil {
@@ -65,6 +82,11 @@ func (v *AviVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
 	}
 
 	checksumStringSlice = append(checksumStringSlice, v.SslKeyAndCertificateRefs...)
+
+	if v.SsoPolicyRef != nil {
+		checksumStringSlice = append(checksumStringSlice, *v.SsoPolicyRef)
+	}
+
 	chksumStr := strings.Join(checksumStringSlice, delim)
 	checksum := utils.Hash(chksumStr)
 	return checksum
@@ -78,8 +100,20 @@ func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 		if o.NetworkSecurityPolicyRef != nil {
 			o.NetworkSecurityPolicyRef = proto.String("/api/networksecuritypolicy?name=" + *o.NetworkSecurityPolicyRef)
 		}
+		for ii := range o.OauthVsConfig.OauthSettings {
+			/*for iiii := range o.OauthVsConfig.OauthSettings[ii].AppSettings.Scopes {
+			}*/
+			if o.OauthVsConfig.OauthSettings[ii].AuthProfileRef != nil {
+				o.OauthVsConfig.OauthSettings[ii].AuthProfileRef = proto.String("/api/authprofile?name=" + *o.OauthVsConfig.OauthSettings[ii].AuthProfileRef)
+			}
+		}
 		if o.PoolRef != nil {
 			o.PoolRef = proto.String("/api/pool?name=" + *o.PoolRef)
+		}
+		if o.SamlSpConfig != nil {
+			if o.SamlSpConfig.SigningSslKeyAndCertificateRef != nil {
+				o.SamlSpConfig.SigningSslKeyAndCertificateRef = proto.String("/api/sslkeyandcertificate?name=" + *o.SamlSpConfig.SigningSslKeyAndCertificateRef)
+			}
 		}
 		if o.SecurityPolicyRef != nil {
 			o.SecurityPolicyRef = proto.String("/api/securitypolicy?name=" + *o.SecurityPolicyRef)
@@ -95,9 +129,11 @@ func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 			}
 		}
 		o.SslKeyAndCertificateRefs = SslKeyAndCertificateRefs
+		if o.SsoPolicyRef != nil {
+			o.SsoPolicyRef = proto.String("/api/ssopolicy?name=" + *o.SsoPolicyRef)
+		}
 	}
 }
-
 func (o *AviVsNodeCommonFields) ConvertToRef() {
 	if o != nil {
 		if o.AnalyticsProfileRef != nil {
@@ -165,6 +201,7 @@ func (v *AviPoolNode) CalculateCheckSumOfGeneratedCode() uint32 {
 	if v.UseServicePort != nil {
 		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.UseServicePort))
 	}
+
 	chksumStr := strings.Join(checksumStringSlice, delim)
 	checksum := utils.Hash(chksumStr)
 	return checksum
@@ -177,7 +214,6 @@ func (o *AviPoolGeneratedFields) ConvertToRef() {
 		}
 	}
 }
-
 func (o *AviPoolCommonFields) ConvertToRef() {
 	if o != nil {
 		if o.ApplicationPersistenceProfileRef != nil {
@@ -202,5 +238,4 @@ func (o *AviPoolCommonFields) ConvertToRef() {
 		}
 	}
 }
-
 

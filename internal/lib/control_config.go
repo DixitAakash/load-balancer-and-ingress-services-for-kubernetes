@@ -59,6 +59,7 @@ type AKOCrdInformers struct {
 	HTTPRuleInformer        akoinformer.HTTPRuleInformer
 	AviInfraSettingInformer akoinformer.AviInfraSettingInformer
 	L4RuleInformer          v1alpha2akoinformer.L4RuleInformer
+	OAuthSamlConfigInformer v1alpha2akoinformer.OAuthSamlConfigInformer
 }
 
 type IstioCRDInformers struct {
@@ -117,6 +118,10 @@ type akoControlConfig struct {
 	// l4RuleEnabled is set to true if the cluster has
 	// L4Rule CRD installed.
 	l4RuleEnabled bool
+
+	// oauthSamlConfigEnabled is set to true if the cluster has
+	// OAuthSamlConfig CRD installed.
+	oauthSamlConfigEnabled bool
 
 	// licenseType holds the default license tier which would be used by new Clouds. Enum options - ENTERPRISE_16, ENTERPRISE, ENTERPRISE_18, BASIC, ESSENTIALS.
 	licenseType string
@@ -273,6 +278,15 @@ func (c *akoControlConfig) Setv1alpha2CRDEnabledParams(cs v1alpha2akocrd.Interfa
 		utils.AviLog.Infof("ako.vmware.com/v1alpha2/L4Rule enabled on cluster")
 		c.l4RuleEnabled = true
 	}
+
+	_, oauthSamlErr := cs.AkoV1alpha2().OAuthSamlConfigs(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{TimeoutSeconds: &timeout})
+	if oauthSamlErr != nil {
+		utils.AviLog.Infof("ako.vmware.com/v1alpha2/OAuthSamlConfig not found/enabled on cluster: %v", err)
+		c.oauthSamlConfigEnabled = false
+	} else {
+		utils.AviLog.Infof("ako.vmware.com/v1alpha2/OAuthSamlConfig enabled on cluster")
+		c.oauthSamlConfigEnabled = true
+	}
 }
 
 func (c *akoControlConfig) AviInfraSettingEnabled() bool {
@@ -289,6 +303,10 @@ func (c *akoControlConfig) HttpRuleEnabled() bool {
 
 func (c *akoControlConfig) L4RuleEnabled() bool {
 	return c.l4RuleEnabled
+}
+
+func (c *akoControlConfig) OAuthSamlConfigEnabled() bool {
+	return c.oauthSamlConfigEnabled
 }
 
 func (c *akoControlConfig) ControllerVersion() string {

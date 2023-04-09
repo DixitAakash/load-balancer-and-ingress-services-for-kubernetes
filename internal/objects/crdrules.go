@@ -28,15 +28,17 @@ var crdonce sync.Once
 func SharedCRDLister() *CRDLister {
 	crdonce.Do(func() {
 		CRDinstance = &CRDLister{
-			FqdnHostRuleCache:      NewObjectMapStore(),
-			HostRuleFQDNCache:      NewObjectMapStore(),
-			FqdnHTTPRulesCache:     NewObjectMapStore(),
-			HTTPRuleFqdnCache:      NewObjectMapStore(),
-			FqdnToGSFQDNCache:      NewObjectMapStore(),
-			FqdnSharedVSModelCache: NewObjectMapStore(),
-			SharedVSModelFqdnCache: NewObjectMapStore(),
-			FqdnFqdnTypeCache:      NewObjectMapStore(),
-			FQDNToAliasesCache:     NewObjectMapStore(),
+			FqdnHostRuleCache:        NewObjectMapStore(),
+			HostRuleFQDNCache:        NewObjectMapStore(),
+			FqdnHTTPRulesCache:       NewObjectMapStore(),
+			HTTPRuleFqdnCache:        NewObjectMapStore(),
+			FqdnToGSFQDNCache:        NewObjectMapStore(),
+			FqdnSharedVSModelCache:   NewObjectMapStore(),
+			SharedVSModelFqdnCache:   NewObjectMapStore(),
+			FqdnFqdnTypeCache:        NewObjectMapStore(),
+			FQDNToAliasesCache:       NewObjectMapStore(),
+			FqdnOAuthSamlConfigCache: NewObjectMapStore(),
+			OAuthSamlConfigFQDNCache: NewObjectMapStore(),
 		}
 	})
 	return CRDinstance
@@ -75,6 +77,13 @@ type CRDLister struct {
 
 	// fqdn: alias1.com, alias2.com
 	FQDNToAliasesCache *ObjectMapStore
+
+	// TODO: can be removed once we move to indexers
+	// fqdn.com: hr1
+	FqdnOAuthSamlConfigCache *ObjectMapStore
+
+	// hr1: fqdn.com - required for httprule
+	OAuthSamlConfigFQDNCache *ObjectMapStore
 }
 
 // FqdnHostRuleCache
@@ -315,4 +324,77 @@ func (c *CRDLister) UpdateFQDNToAliasesMappings(fqdn string, aliases []string) {
 
 func (c *CRDLister) DeleteFQDNToAliasesMapping(fqdn string) bool {
 	return c.FQDNToAliasesCache.Delete(fqdn)
+}
+
+// FqdnOAuthSamlConfigCache
+func (c *CRDLister) GetFQDNToOAuthSamlConfigMapping(fqdn string) (bool, string) {
+	found, oauthSamlConfig := c.FqdnOAuthSamlConfigCache.Get(fqdn)
+	if !found {
+		return false, ""
+	}
+	return true, oauthSamlConfig.(string)
+}
+
+func (c *CRDLister) GetFQDNToOAuthSamlConfigMappingWithType(fqdn string) (bool, string) {
+	// not exact fqdns
+	allFqdns := c.FqdnOAuthSamlConfigCache.GetAllKeys()
+	returnFqdnOAuthSamlConfigs := []string{}
+	for _, mFqdn := range allFqdns {
+		oktype, fqdnType := c.FqdnFqdnTypeCache.Get(mFqdn)
+		if !oktype || fqdnType == "" {
+			fqdnType = string(akov1alpha1.Exact)
+		}
+
+		if fqdnType == string(akov1alpha1.Exact) && mFqdn == fqdn {
+			if found, oauthSamlConfig := c.FqdnOAuthSamlConfigCache.Get(mFqdn); found {
+				returnFqdnOAuthSamlConfigs = append(returnFqdnOAuthSamlConfigs, oauthSamlConfig.(string))
+				break
+			}
+		} else if fqdnType == string(akov1alpha1.Contains) && strings.Contains(fqdn, mFqdn) {
+			if found, oauthSamlConfig := c.FqdnOAuthSamlConfigCache.Get(mFqdn); found {
+				returnFqdnOAuthSamlConfigs = append(returnFqdnOAuthSamlConfigs, oauthSamlConfig.(string))
+				break
+			}
+		} else if fqdnType == string(akov1alpha1.Wildcard) && strings.HasPrefix(mFqdn, "*") {
+			wildcardFqdn := strings.Split(mFqdn, "*")[1]
+			if strings.HasSuffix(fqdn, wildcardFqdn) {
+				if found, oauthSamlConfig := c.FqdnOAuthSamlConfigCache.Get(mFqdn); found {
+					returnFqdnOAuthSamlConfigs = append(returnFqdnOAuthSamlConfigs, oauthSamlConfig.(string))
+				}
+				break
+			}
+		}
+	}
+
+	if len(returnFqdnOAuthSamlConfigs) > 0 {
+		return true, returnFqdnOAuthSamlConfigs[0]
+	}
+	return false, ""
+}
+
+func (c *CRDLister) GetOAuthSamlConfigToFQDNMapping(oauthSamlConfig string) (bool, string) {
+	found, fqdn := c.OAuthSamlConfigFQDNCache.Get(oauthSamlConfig)
+	if !found {
+		return false, ""
+	}
+	return true, fqdn.(string)
+}
+
+func (c *CRDLister) DeleteOAuthSamlConfigFQDNMapping(oauthSamlConfig string) bool {
+	c.NSLock.Lock()
+	defer c.NSLock.Unlock()
+	found, fqdn := c.OAuthSamlConfigFQDNCache.Get(oauthSamlConfig)
+	if found {
+		success1 := c.OAuthSamlConfigFQDNCache.Delete(oauthSamlConfig)
+		success2 := c.FqdnOAuthSamlConfigCache.Delete(fqdn.(string))
+		return success1 && success2
+	}
+	return true
+}
+
+func (c *CRDLister) UpdateFQDNOAuthSamlConfigMapping(fqdn string, oauthSamlConfig string) {
+	c.NSLock.Lock()
+	defer c.NSLock.Unlock()
+	c.FqdnOAuthSamlConfigCache.AddOrUpdate(fqdn, oauthSamlConfig)
+	c.OAuthSamlConfigFQDNCache.AddOrUpdate(oauthSamlConfig, fqdn)
 }

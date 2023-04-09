@@ -27,6 +27,7 @@ import (
 type AkoV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	L4RulesGetter
+	OAuthSamlConfigsGetter
 }
 
 // AkoV1alpha2Client is used to interact with features provided by the ako.vmware.com group.
@@ -36,6 +37,10 @@ type AkoV1alpha2Client struct {
 
 func (c *AkoV1alpha2Client) L4Rules(namespace string) L4RuleInterface {
 	return newL4Rules(c, namespace)
+}
+
+func (c *AkoV1alpha2Client) OAuthSamlConfigs(namespace string) OAuthSamlConfigInterface {
+	return newOAuthSamlConfigs(c, namespace)
 }
 
 // NewForConfig creates a new AkoV1alpha2Client for the given config.

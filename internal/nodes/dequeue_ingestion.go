@@ -90,6 +90,13 @@ func DequeueIngestion(key string, fullsync bool) {
 		handleHostRuleForSharedVS(key, fullsync)
 	}
 
+	if objType == lib.OAuthSamlConfig &&
+		((utils.GetInformers().IngressInformer != nil && len(ingressNames) == 0) ||
+			(utils.GetInformers().RouteInformer != nil && len(routeNames) == 0)) {
+		// We should be checking for oauthSamlConfig being possibly connected to a SharedVS
+		handleOAuthSamlConfigForSharedVS(key, fullsync)
+	}
+
 	// if we get update for object of type k8s node, create vrf graph
 	// if in NodePort Mode we update pool servers
 	if objType == utils.NodeObj {
@@ -367,6 +374,92 @@ func handleHostRuleForSharedVS(key string, fullsync bool) {
 				ok := saveAviModel(modelName, aviModelObject, key)
 				if ok && len(aviModelObject.GetOrderedNodes()) != 0 && !fullsync {
 					PublishKeyToRestLayer(modelName, key, sharedQueue)
+				}
+			}
+		}
+	}
+}
+
+func handleOAuthSamlConfigForSharedVS(key string, fullsync bool) {
+	allModels := []string{}
+	_, namespace, oscName := lib.ExtractTypeNameNamespace(key)
+	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	var fqdn, oldFqdn string
+	var fqdnType, oldFqdnType = string(akov1alpha1.Exact), string(akov1alpha1.Exact)
+	var oldFound bool
+
+	oauthSamlConfig, err := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(namespace).Get(oscName)
+	if k8serrors.IsNotFound(err) {
+		utils.AviLog.Debugf("key: %s, msg: OAuthSamlConfig Deleted", key)
+		oldFound, oldFqdn = objects.SharedCRDLister().GetOAuthSamlConfigToFQDNMapping(namespace + "/" + oscName)
+		if strings.Contains(oldFqdn, lib.ShardVSSubstring) {
+			objects.SharedCRDLister().DeleteOAuthSamlConfigFQDNMapping(namespace + "/" + oscName)
+		}
+	} else if err != nil {
+		utils.AviLog.Errorf("key: %s, msg: Error getting oauthSamlConfig: %v", key, err)
+		return
+	} else {
+		if oauthSamlConfig.Status.Status == lib.StatusAccepted {
+			fqdn = *oauthSamlConfig.Spec.Fqdn
+			oldFound, oldFqdn = objects.SharedCRDLister().GetOAuthSamlConfigToFQDNMapping(namespace + "/" + oscName)
+			if oldFound && strings.Contains(oldFqdn, lib.ShardVSSubstring) {
+				objects.SharedCRDLister().DeleteOAuthSamlConfigFQDNMapping(namespace + "/" + oscName)
+			}
+			if strings.Contains(fqdn, lib.ShardVSSubstring) {
+				objects.SharedCRDLister().UpdateFQDNOAuthSamlConfigMapping(fqdn, namespace+"/"+oscName)
+			}
+		}
+	}
+
+	if oldFound && strings.Contains(oldFqdn, lib.ShardVSSubstring) {
+		if ok, obj := objects.SharedCRDLister().GetFQDNToSharedVSModelMapping(oldFqdn, oldFqdnType); !ok {
+			utils.AviLog.Debugf("key: %s, msg: Couldn't find SharedVS model info for host: %s %s", key, oldFqdn, oldFqdnType)
+		} else {
+			allModels = append(allModels, obj...)
+		}
+	}
+
+	if strings.Contains(fqdn, lib.ShardVSSubstring) {
+		if ok, obj := objects.SharedCRDLister().GetFQDNToSharedVSModelMapping(fqdn, fqdnType); !ok {
+			utils.AviLog.Debugf("key: %s, msg: Couldn't find SharedVS model info for host: %s %s", key, fqdn, fqdnType)
+		} else {
+			allModels = append(allModels, obj...)
+		}
+	}
+
+	if len(allModels) == 0 {
+		return
+	}
+	utils.AviLog.Infof("key: %s, msg: Models retrieved from OAuthSamlConfig %v", key, utils.Stringify(allModels))
+
+	uniqueModelSet := make(map[string]bool)
+	for _, modelName := range allModels {
+		if _, ok := uniqueModelSet[modelName]; ok {
+			continue
+		}
+		uniqueModelSet[modelName] = true
+		// Try getting the SharedVS model, update with OAuthSamlConfig properties
+		// and publish to the rest layer.
+		found, aviModel := objects.SharedAviGraphLister().Get(modelName)
+		if !found || aviModel == nil {
+			utils.AviLog.Infof("key: %s, msg: model not found for %s", key, modelName)
+		} else {
+			aviModelObject := aviModel.(*AviObjectGraph)
+			//var vsNode AviVsEvhSniModel
+			var vsNode *AviEvhVsNode
+			if lib.IsEvhEnabled() {
+				if nodes := aviModelObject.GetAviEvhVS(); len(nodes) == 0 {
+					continue
+				} else {
+					vsNode = nodes[0]
+				}
+
+				if found, fqdn := objects.SharedCRDLister().GetSharedVSModelFQDNMapping(modelName); found {
+					BuildL7OAuthSamlConfig(fqdn, key, vsNode)
+					ok := saveAviModel(modelName, aviModelObject, key)
+					if ok && len(aviModelObject.GetOrderedNodes()) != 0 && !fullsync {
+						PublishKeyToRestLayer(modelName, key, sharedQueue)
+					}
 				}
 			}
 		}
@@ -711,7 +804,7 @@ func handleMultiClusterIngress(key string, fullsync bool, ingressNames []string)
 }
 
 func getIngressNSNameForIngestion(objType, namespace, nsname string) (string, string) {
-	if objType == lib.HostRule || objType == lib.HTTPRule || objType == utils.Secret {
+	if objType == lib.HostRule || objType == lib.HTTPRule || objType == utils.Secret || objType == lib.OAuthSamlConfig {
 		arr := strings.Split(nsname, "/")
 		return arr[0], arr[1]
 	}

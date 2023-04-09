@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
@@ -24,6 +25,8 @@ import (
 	akov1alpha1 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha1"
 	akov1alpha2 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Validator interface {
@@ -33,6 +36,7 @@ type Validator interface {
 	ValidateMultiClusterIngressObj(key string, multiClusterIngress *akov1alpha1.MultiClusterIngress) error
 	ValidateServiceImportObj(key string, serviceImport *akov1alpha1.ServiceImport) error
 	ValidateL4RuleObj(key string, l4Rule *akov1alpha2.L4Rule) error
+	ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error
 }
 
 type (
@@ -209,6 +213,21 @@ func validateSecretReferenceInHostrule(namespace, secretName string) error {
 
 	_, err := utils.GetInformers().SecretInformer.Lister().Secrets(namespace).Get(secretName)
 	return err
+}
+
+func validateSecretReferenceInOAuthSamlConfig(namespace, secretName string) (*v1.Secret, error) {
+
+	// reject the hostrule if the secret handling is restricted to the namespace where
+	// AKO is installed.
+	if utils.GetInformers().RouteInformer != nil &&
+		namespace != utils.GetAKONamespace() &&
+		utils.IsSecretsHandlingRestrictedToAKONS() {
+		err := fmt.Errorf("secret handling is restricted to %s namespace only", utils.GetAKONamespace())
+		return nil, err
+	}
+
+	secretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(namespace).Get(secretName)
+	return secretObj, err
 }
 
 // validateHTTPRuleObj would do validation checks
@@ -465,6 +484,145 @@ func (l *leader) ValidateL4RuleObj(key string, l4Rule *akov1alpha2.L4Rule) error
 	return nil
 }
 
+// ValidateOAuthSamlConfigObj would do validation checks
+// update internal CRD caches, and push relevant ingresses to ingestion
+func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error {
+	var err error
+	fqdn := *oauthSamlConfig.Spec.Fqdn
+	foundHost, foundOSC := objects.SharedCRDLister().GetFQDNToOAuthSamlConfigMapping(fqdn)
+	if foundHost && foundOSC != oauthSamlConfig.Namespace+"/"+oauthSamlConfig.Name {
+		err = fmt.Errorf("duplicate fqdn %s found in %s", fqdn, foundOSC)
+		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+		return err
+	}
+
+	refData := make(map[string]string)
+
+	if oauthSamlConfig.Spec.SsoPolicyRef != nil {
+		err = fmt.Errorf("SsoPolicyRef is not specified")
+		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+		return err
+	}
+	refData[*oauthSamlConfig.Spec.SsoPolicyRef] = "SSOPolicy"
+
+	if oauthSamlConfig.Spec.OauthVsConfig != nil {
+		oauthConfigObj := oauthSamlConfig.Spec.OauthVsConfig
+
+		/*if oauthConfigObj.CookieTimeout != nil {
+			if *oauthConfigObj.CookieTimeout < 1 || *oauthConfigObj.CookieTimeout > 1440 {
+				err = fmt.Errorf("CookieTimeout %d is not valid. Allowed values are 1-1440", *oauthConfigObj.CookieTimeout)
+				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+				return err
+			}
+		}*/
+
+		if len(oauthConfigObj.OauthSettings) != 0 {
+			for _, profile := range oauthConfigObj.OauthSettings {
+				refData[*profile.AuthProfileRef] = "AuthProfile"
+
+				if profile.AppSettings != nil {
+					clientSecret := *profile.AppSettings.ClientSecret
+					clientSecretObj, err := validateSecretReferenceInOAuthSamlConfig(oauthSamlConfig.Namespace, clientSecret)
+					//clientSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(oauthSamlConfig.Namespace).Get(context.TODO(), clientSecretRef, metav1.GetOptions{})
+					if err != nil {
+						err = fmt.Errorf("Got error while fetching %s secret : %s", clientSecret, err.Error())
+						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						return err
+					}
+					//clientSecret, _, err := controllerInstance.GetOAuthClientServerSecret(clientSecretRef, oauthSamlConfig.Namespace)
+					if clientSecretObj == nil {
+						err = fmt.Errorf("specified client secret is empty : %s", clientSecret)
+						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						return err
+					}
+					clientSecretString := string(clientSecretObj.Data["clientSecret"])
+					if clientSecretString == "" {
+						err = fmt.Errorf("clientSecret field not found in %s secret", clientSecret)
+						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						return err
+					}
+					//lib.OAuthSecretMap.Store(oauthSamlConfig.Namespace+"/"+clientSecretRef+"/"+"Client", clientSecret)
+				}
+
+				if profile.ResourceServer != nil {
+					if *profile.ResourceServer.AccessType == "ACCESS_TOKEN_TYPE_JWT" && profile.ResourceServer.JwtParams == nil {
+						err = fmt.Errorf("Access Type is %s, but Jwt Params have not been specified", *profile.ResourceServer.AccessType)
+						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						return err
+					}
+					if *profile.ResourceServer.AccessType == "ACCESS_TOKEN_TYPE_OPAQUE" && profile.ResourceServer.OpaqueTokenParams == nil {
+						err = fmt.Errorf("Access Type is %s, but Opaque Token Params have not been specified", *profile.ResourceServer.AccessType)
+						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						return err
+					}
+					/*if profile.ResourceServer.IntrospectionDataTimeout != nil {
+						if *profile.ResourceServer.IntrospectionDataTimeout < 0 || *profile.ResourceServer.IntrospectionDataTimeout > 1440 {
+							err = fmt.Errorf("IntrospectionDataTimeout %d is not valid. Allowed values are 0-1440", *profile.ResourceServer.IntrospectionDataTimeout)
+							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							return err
+						}
+					}*/
+					if profile.ResourceServer.OpaqueTokenParams != nil {
+						serverSecret := *profile.ResourceServer.OpaqueTokenParams.ServerSecret
+						serverSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(oauthSamlConfig.Namespace).Get(context.TODO(), serverSecret, metav1.GetOptions{})
+						if err != nil {
+							err = fmt.Errorf("Got error while fetching %s secret : %s", serverSecret, err.Error())
+							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							return err
+						}
+						//_, serverSecret, err := controllerInstance.GetOAuthClientServerSecret(serverSecretRef, oauthSamlConfig.Namespace)
+						if serverSecretObj == nil {
+							err = fmt.Errorf("specified server secret is empty : %s", serverSecret)
+							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							return err
+						}
+						serverSecretString := string(serverSecretObj.Data["serverSecret"])
+						if serverSecretString == "" {
+							err = fmt.Errorf("serverSecret field not found in %s secret", serverSecret)
+							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							return err
+						}
+						//lib.OAuthSecretMap.Store(oauthSamlConfig.Namespace+"/"+serverSecretRef+"/"+"Server", serverSecret)
+					}
+				}
+			}
+		}
+	}
+	if oauthSamlConfig.Spec.SamlSpConfig != nil {
+		samlConfigObj := oauthSamlConfig.Spec.SamlSpConfig
+		/*if samlConfigObj.AcsIndex != nil {
+			if *samlConfigObj.AcsIndex < 0 || *samlConfigObj.AcsIndex > 64 {
+				err = fmt.Errorf("AcsIndex %d is not valid. Allowed values are 0-64", *samlConfigObj.AcsIndex)
+				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+				return err
+			}
+		}*/
+		/*if samlConfigObj.CookieTimeout != nil {
+			if *samlConfigObj.CookieTimeout < 1 || *samlConfigObj.CookieTimeout > 1440 {
+				err = fmt.Errorf("CookieTimeout %d is not valid. Allowed values are 1-1440", *samlConfigObj.CookieTimeout)
+				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+				return err
+			}
+		}*/
+		if samlConfigObj.SigningSslKeyAndCertificateRef != nil {
+			refData[*samlConfigObj.SigningSslKeyAndCertificateRef] = "SslKeyCert"
+		}
+	}
+
+	if err := checkRefsOnController(key, refData); err != nil {
+		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+		return err
+	}
+
+	// No need to update status of oauthSamlConfig object as accepted since it was accepted before.
+	if oauthSamlConfig.Status.Status == lib.StatusAccepted {
+		return nil
+	}
+
+	status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusAccepted, Error: ""})
+	return nil
+}
+
 func (f *follower) ValidateHTTPRuleObj(key string, httprule *akov1alpha1.HTTPRule) error {
 	utils.AviLog.Debugf("key: %s, AKO is not a leader, not validating HTTPRule object", key)
 	return nil
@@ -495,5 +653,10 @@ func (f *follower) ValidateServiceImportObj(key string, serviceImport *akov1alph
 
 func (l *follower) ValidateL4RuleObj(key string, l4Rule *akov1alpha2.L4Rule) error {
 	utils.AviLog.Debugf("key: %s, AKO is not a leader, not validating L4Rule object", key)
+	return nil
+}
+
+func (f *follower) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error {
+	utils.AviLog.Debugf("key: %s, AKO is not a leader, not validating OAuthSamlConfig object", key)
 	return nil
 }

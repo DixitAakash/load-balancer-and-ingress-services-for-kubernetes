@@ -25,3 +25,11 @@ type L4RuleListerExpansion interface{}
 // L4RuleNamespaceListerExpansion allows custom methods to be added to
 // L4RuleNamespaceLister.
 type L4RuleNamespaceListerExpansion interface{}
+
+// OAuthSamlConfigListerExpansion allows custom methods to be added to
+// OAuthSamlConfigLister.
+type OAuthSamlConfigListerExpansion interface{}
+
+// OAuthSamlConfigNamespaceListerExpansion allows custom methods to be added to
+// OAuthSamlConfigNamespaceLister.
+type OAuthSamlConfigNamespaceListerExpansion interface{}

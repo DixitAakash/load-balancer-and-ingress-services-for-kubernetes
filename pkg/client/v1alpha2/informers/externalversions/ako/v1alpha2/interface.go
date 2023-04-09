@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// L4Rules returns a L4RuleInformer.
 	L4Rules() L4RuleInformer
+	// OAuthSamlConfigs returns a OAuthSamlConfigInformer.
+	OAuthSamlConfigs() OAuthSamlConfigInformer
 }
 
 type version struct {
@@ -42,4 +44,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // L4Rules returns a L4RuleInformer.
 func (v *version) L4Rules() L4RuleInformer {
 	return &l4RuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// OAuthSamlConfigs returns a OAuthSamlConfigInformer.
+func (v *version) OAuthSamlConfigs() OAuthSamlConfigInformer {
+	return &oAuthSamlConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

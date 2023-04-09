@@ -19,12 +19,14 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jinzhu/copier"
 	"github.com/vmware/alb-sdk/go/models"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/lib"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/objects"
 	akov1alpha1 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha1"
+	akov1alpha2 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 )
 
@@ -353,4 +355,88 @@ func BuildPoolHTTPRule(host, poolPath, ingName, namespace, infraSettingName, key
 		}
 	}
 
+}
+
+func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
+	// use host to find out OAuthSamlConfig CRD if it exists
+	// The host that comes here will have a proper FQDN, either from the Ingress/Route (foo.com)
+	// or the SharedVS FQDN (Shared-L7-1.com).
+	found, oscNamespaceName := objects.SharedCRDLister().GetFQDNToOAuthSamlConfigMapping(host)
+	deleteCase := false
+	if !found {
+		utils.AviLog.Debugf("key: %s, msg: No OAuthSamlConfig found for virtualhost: %s in Cache", key, host)
+		deleteCase = true
+	}
+
+	var err error
+	var oscNSName []string
+	var oauthSamlConfig *akov1alpha2.OAuthSamlConfig
+	if !deleteCase {
+		oscNSName = strings.Split(oscNamespaceName, "/")
+		oauthSamlConfig, err = lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(oscNSName[0]).Get(oscNSName[1])
+		if err != nil {
+			utils.AviLog.Debugf("key: %s, msg: No OAuthSamlConfig found for virtualhost: %s msg: %v", key, host, err)
+			deleteCase = true
+		} else if oauthSamlConfig.Status.Status == lib.StatusRejected {
+			// do not apply a rejected OAuthSamlConfig, this way the VS would retain
+			return
+		}
+	}
+
+	var crdStatus lib.CRDMetadata
+
+	if !deleteCase {
+		copier.Copy(vsNode, &oauthSamlConfig.Spec)
+		if oauthSamlConfig.Spec.OauthVsConfig != nil {
+			if len(oauthSamlConfig.Spec.OauthVsConfig.OauthSettings) != 0 {
+				for i, oauthSetting := range oauthSamlConfig.Spec.OauthVsConfig.OauthSettings {
+					if oauthSetting.AppSettings != nil {
+						clientSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.AppSettings.ClientSecret)
+						if err != nil || clientSecretObj == nil {
+							utils.AviLog.Errorf("key: %s, msg: Client secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.AppSettings.ClientSecret, err)
+							return
+						}
+						clientSecretString := string(clientSecretObj.Data["clientSecret"])
+						vsNode.OauthVsConfig.OauthSettings[i].AppSettings.ClientSecret = &clientSecretString
+					}
+					if oauthSetting.ResourceServer != nil {
+						//if oauthSetting.ResourceServer.JwtParams != nil {
+						if oauthSetting.ResourceServer.OpaqueTokenParams != nil {
+							serverSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret)
+							if err != nil || serverSecretObj == nil {
+								utils.AviLog.Errorf("key: %s, msg: Server secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret, err)
+								return
+							}
+							serverSecretString := string(serverSecretObj.Data["serverSecret"])
+							vsNode.OauthVsConfig.OauthSettings[i].ResourceServer.OpaqueTokenParams.ServerSecret = &serverSecretString
+						}
+					}
+				}
+			}
+		}
+		//if oauthSamlConfig.Spec.SAMLSPConfig != nil {
+
+		vsNode.AviVsNodeCommonFields.ConvertToRef()
+		vsNode.AviVsNodeGeneratedFields.ConvertToRef()
+
+		crdStatus = lib.CRDMetadata{
+			Type:   "OAuthSamlConfig",
+			Value:  oauthSamlConfig.Namespace + "/" + oauthSamlConfig.Name,
+			Status: lib.CRDActive,
+		}
+
+		utils.AviLog.Infof("key: %s, Successfully attached OAuthSamlConfig %s on vsNode %s", key, oscNamespaceName, vsNode.GetName())
+	} else {
+		if vsNode.GetServiceMetadata().CRDStatus.Value != "" {
+			crdStatus = vsNode.GetServiceMetadata().CRDStatus
+			crdStatus.Status = lib.CRDInactive
+		}
+		if oscNamespaceName != "" {
+			utils.AviLog.Infof("key: %s, Successfully detached OAuthSamlConfig %s from vsNode %s", key, oscNamespaceName, vsNode.GetName())
+		}
+	}
+
+	serviceMetadataObj := vsNode.GetServiceMetadata()
+	serviceMetadataObj.CRDStatus = crdStatus
+	vsNode.SetServiceMetadata(serviceMetadataObj)
 }

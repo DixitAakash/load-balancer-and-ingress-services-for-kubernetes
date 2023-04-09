@@ -1105,6 +1105,8 @@ func (o *AviObjectGraph) BuildModelGraphForInsecureEVH(routeIgrObj RouteIngressM
 	}
 	// build host rule for insecure ingress in evh
 	BuildL7HostRule(host, key, evhNode)
+	// build oauthSamlConfig for insecure ingress in evh
+	BuildL7OAuthSamlConfig(host, key, evhNode)
 	if !isDedicated {
 		manipulateEvhNodeForSSL(key, vsNode[0], evhNode)
 	}
@@ -1482,6 +1484,8 @@ func (o *AviObjectGraph) BuildModelGraphForSecureEVH(routeIgrObj RouteIngressMod
 		}
 		// Enable host rule
 		BuildL7HostRule(host, key, evhNode)
+		// build oauthSamlConfig for secure ingress in evh
+		BuildL7OAuthSamlConfig(host, key, evhNode)
 		if !isDedicated {
 			manipulateEvhNodeForSSL(key, vsNode[0], evhNode)
 		}

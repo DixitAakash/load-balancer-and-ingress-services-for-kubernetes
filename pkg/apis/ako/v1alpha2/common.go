@@ -47,7 +47,62 @@ type FullClientLogs struct {
 	Throttle *int32 `json:"throttle,omitempty"`
 }
 
+type JWTValidationParams struct {
+	Audience *string `json:"audience"`
+}
+
+type OAuthAppSettings struct {
+	ClientId     *string     `json:"clientId"`
+	ClientSecret *string     `json:"clientSecret"`
+	OidcConfig   *OIDCConfig `json:"oidcConfig,omitempty"`
+	Scopes       []string    `json:"scopes,omitempty"`
+}
+
+type OAuthResourceServer struct {
+	AccessType               *string                      `json:"accessType"`
+	IntrospectionDataTimeout *int32                       `json:"introspectionDataTimeout,omitempty"`
+	JwtParams                *JWTValidationParams         `json:"jwtParams,omitempty"`
+	OpaqueTokenParams        *OpaqueTokenValidationParams `json:"opaqueTokenParams,omitempty"`
+}
+
+type OAuthSettings struct {
+	AppSettings    *OAuthAppSettings    `json:"appSettings,omitempty"`
+	AuthProfileRef *string              `json:"authProfileRef"`
+	ResourceServer *OAuthResourceServer `json:"resourceServer,omitempty"`
+}
+
+type OAuthVSConfig struct {
+	CookieName            *string          `json:"cookieName,omitempty"`
+	CookieTimeout         *int32           `json:"cookieTimeout,omitempty"`
+	LogoutUri             *string          `json:"logoutUri,omitempty"`
+	OauthSettings         []*OAuthSettings `json:"oauthSettings,omitempty"`
+	PostLogoutRedirectUri *string          `json:"postLogoutRedirectUri,omitempty"`
+	RedirectUri           *string          `json:"redirectUri,omitempty"`
+}
+
+type OIDCConfig struct {
+	OidcEnable *bool `json:"oidcEnable,omitempty"`
+	Profile    *bool `json:"profile,omitempty"`
+	Userinfo   *bool `json:"userinfo,omitempty"`
+}
+
+type OpaqueTokenValidationParams struct {
+	ServerId     *string `json:"serverId"`
+	ServerSecret *string `json:"serverSecret"`
+}
+
 type PoolAnalyticsPolicy struct {
 	EnableRealtimeMetrics *bool `json:"enableRealtimeMetrics,omitempty"`
+}
+
+type SAMLSPConfig struct {
+	AcsIndex                       *int32  `json:"acsIndex,omitempty"`
+	AuthnReqAcsType                *string `json:"authnReqAcsType"`
+	CookieName                     *string `json:"cookieName,omitempty"`
+	CookieTimeout                  *int32  `json:"cookieTimeout,omitempty"`
+	EntityId                       *string `json:"entityId"`
+	SigningSslKeyAndCertificateRef *string `json:"signingSslKeyAndCertificateRef,omitempty"`
+	SingleSignonUrl                *string `json:"singleSignonUrl"`
+	UseIdpSessionTimeout           *bool   `json:"useIdpSessionTimeout,omitempty"`
 }
 

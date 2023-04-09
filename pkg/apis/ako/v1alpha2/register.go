@@ -51,7 +51,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
 		&L4Rule{},
-		&L4RuleList{},
+		&L4RuleList{},&OAuthSamlConfig{},
+		&OAuthSamlConfigList{},
 	)
 
 	scheme.AddKnownTypes(
