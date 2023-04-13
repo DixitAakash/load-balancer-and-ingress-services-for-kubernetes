@@ -25,7 +25,7 @@ type OAuthSamlConfigSpec struct {
 	Fqdn          *string        `json:"fqdn"`
 	OauthVsConfig *OAuthVSConfig `json:"oauthVsConfig,omitempty"`
 	SamlSpConfig  *SAMLSPConfig  `json:"samlSpConfig,omitempty"`
-	SsoPolicyRef  *string        `json:"ssoPolicyRef,omitempty"`
+	SsoPolicyRef  *string        `json:"ssoPolicyRef"`
 }
 
 

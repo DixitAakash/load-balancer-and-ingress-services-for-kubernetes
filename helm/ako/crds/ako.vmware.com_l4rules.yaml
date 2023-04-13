@@ -68,7 +68,7 @@ spec:
                 description: Specifies settings related to analytics.
                 type: string
               applicationProfileRef:
-                default: System-HTTP
+                default: System-L4-Application
                 description: Enable application layer specific features for the Virtual
                   Service.
                 type: string
@@ -141,7 +141,6 @@ spec:
                       - LB_ALGORITHM_TOPOLOGY
                       type: string
                     lbAlgorithmHash:
-                      default: LB_ALGORITHM_CONSISTENT_HASH_SOURCE_IP_ADDRESS
                       description: Criteria used as a key for determining the hash
                         between the client and  server.
                       enum:
@@ -161,7 +160,7 @@ spec:
                         a server against the selected PKI Profile.
                       type: string
                     port:
-                      default: "80"
+                      default: 80
                       description: Port info
                       maximum: 65535
                       minimum: 1

@@ -96,6 +96,14 @@ type AviVsEvhSniModel interface {
 
 	GetVHDomainNames() []string
 	SetVHDomainNames([]string)
+
+	GeneratedModel
+}
+
+type GeneratedModel interface {
+	Get() AviVsEvhSniModel
+	GetGenerateFields() *AviVsNodeGeneratedFields
+	GetCommonFields() *AviVsNodeCommonFields
 }
 
 type AviEvhVsNode struct {
@@ -313,6 +321,18 @@ func (v *AviEvhVsNode) GetVHDomainNames() []string {
 
 func (v *AviEvhVsNode) SetVHDomainNames(domainNames []string) {
 	v.VHDomainNames = domainNames
+}
+
+func (v *AviEvhVsNode) Get() AviVsEvhSniModel {
+	return v
+}
+
+func (v *AviEvhVsNode) GetGenerateFields() *AviVsNodeGeneratedFields {
+	return &v.AviVsNodeGeneratedFields
+}
+
+func (v *AviEvhVsNode) GetCommonFields() *AviVsNodeCommonFields {
+	return &v.AviVsNodeCommonFields
 }
 
 func (o *AviObjectGraph) GetAviEvhVS() []*AviEvhVsNode {

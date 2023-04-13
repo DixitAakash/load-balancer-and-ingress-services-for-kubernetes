@@ -18,8 +18,8 @@ package nodes
 
 import (
 	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -43,56 +43,7 @@ type AviVsNodeGeneratedFields struct {
 	SsoPolicyRef             *string
 }
 
-func (v *AviVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
-	checksumStringSlice := make([]string, 0, 12)
-	if v.DelayFairness != nil {
-		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.DelayFairness))
-	}
-
-	if v.Fqdn != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.Fqdn)
-	}
-
-	if v.NetworkProfileRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.NetworkProfileRef)
-	}
-
-	if v.NetworkSecurityPolicyRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.NetworkSecurityPolicyRef)
-	}
-
-	if v.OauthVsConfig != nil {
-		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.OauthVsConfig))
-	}
-
-	if v.PoolRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.PoolRef)
-	}
-
-	if v.SamlSpConfig != nil {
-		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.SamlSpConfig))
-	}
-
-	if v.SecurityPolicyRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.SecurityPolicyRef)
-	}
-
-	if v.ServerNetworkProfileRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.ServerNetworkProfileRef)
-	}
-
-	checksumStringSlice = append(checksumStringSlice, v.SslKeyAndCertificateRefs...)
-
-	if v.SsoPolicyRef != nil {
-		checksumStringSlice = append(checksumStringSlice, *v.SsoPolicyRef)
-	}
-
-	chksumStr := strings.Join(checksumStringSlice, delim)
-	checksum := utils.Hash(chksumStr)
-	return checksum
-}
-
-func (v *AviEvhVsNode) CalculateCheckSumOfGeneratedCode() uint32 {
+func (v *AviVsNodeGeneratedFields) CalculateCheckSumOfGeneratedCode() uint32 {
 	checksumStringSlice := make([]string, 0, 12)
 	if v.DelayFairness != nil {
 		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.DelayFairness))
@@ -149,9 +100,13 @@ func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 		if o.NetworkSecurityPolicyRef != nil {
 			o.NetworkSecurityPolicyRef = proto.String("/api/networksecuritypolicy?name=" + *o.NetworkSecurityPolicyRef)
 		}
-		for ii := range o.OauthVsConfig.OauthSettings {
-			if o.OauthVsConfig.OauthSettings[ii].AuthProfileRef != nil {
-				o.OauthVsConfig.OauthSettings[ii].AuthProfileRef = proto.String("/api/authprofile?name=" + *o.OauthVsConfig.OauthSettings[ii].AuthProfileRef)
+		if o.OauthVsConfig != nil {
+			for ii := range o.OauthVsConfig.OauthSettings {
+				if o.OauthVsConfig.OauthSettings[ii] != nil {
+					if o.OauthVsConfig.OauthSettings[ii].AuthProfileRef != nil {
+						o.OauthVsConfig.OauthSettings[ii].AuthProfileRef = proto.String("/api/authprofile?name=" + *o.OauthVsConfig.OauthSettings[ii].AuthProfileRef)
+					}
+				}
 			}
 		}
 		if o.PoolRef != nil {
@@ -181,6 +136,7 @@ func (o *AviVsNodeGeneratedFields) ConvertToRef() {
 		}
 	}
 }
+
 func (o *AviVsNodeCommonFields) ConvertToRef() {
 	if o != nil {
 		if o.AnalyticsProfileRef != nil {
@@ -219,7 +175,7 @@ type AviPoolGeneratedFields struct {
 	UseServicePort      *bool
 }
 
-func (v *AviPoolNode) CalculateCheckSumOfGeneratedCode() uint32 {
+func (v *AviPoolGeneratedFields) CalculateCheckSumOfGeneratedCode() uint32 {
 	checksumStringSlice := make([]string, 0, 7)
 	if v.AnalyticsPolicy != nil {
 		checksumStringSlice = append(checksumStringSlice, utils.Stringify(v.AnalyticsPolicy))
@@ -261,6 +217,7 @@ func (o *AviPoolGeneratedFields) ConvertToRef() {
 		}
 	}
 }
+
 func (o *AviPoolCommonFields) ConvertToRef() {
 	if o != nil {
 		if o.ApplicationPersistenceProfileRef != nil {

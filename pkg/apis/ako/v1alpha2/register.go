@@ -50,9 +50,11 @@ func Resource(resource string) schema.GroupResource {
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
-		&OAuthSamlConfig{},
-		&OAuthSamlConfigList{},&L4Rule{},
+		&L4Rule{},
 		&L4RuleList{},
+		&OAuthSamlConfig{},
+		&OAuthSamlConfigList{},
+		
 	)
 
 	scheme.AddKnownTypes(

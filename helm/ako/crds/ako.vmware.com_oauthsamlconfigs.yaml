@@ -29,6 +29,11 @@ spec:
       openAPIV3Schema:
         properties:
           spec:
+            oneOf:
+            - required:
+              - oauthVsConfig
+            - required:
+              - samlSpConfig
             properties:
               fqdn:
                 description: Fqdn to be used to apply the OAuthSamlConfig CRD object
@@ -97,6 +102,11 @@ spec:
                           type: string
                         resourceServer:
                           description: Resource Server OAuth config.
+                          oneOf:
+                          - required:
+                            - jwtParams
+                          - required:
+                            - opaqueTokenParams
                           properties:
                             accessType:
                               description: Access token type.
@@ -211,6 +221,7 @@ spec:
                 type: string
             required:
             - fqdn
+            - ssoPolicyRef
             type: object
           status:
             properties:

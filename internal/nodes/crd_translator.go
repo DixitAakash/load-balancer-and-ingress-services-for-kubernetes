@@ -357,10 +357,10 @@ func BuildPoolHTTPRule(host, poolPath, ingName, namespace, infraSettingName, key
 
 }
 
-func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
+func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 	// use host to find out OAuthSamlConfig CRD if it exists
 	// The host that comes here will have a proper FQDN, either from the Ingress/Route (foo.com)
-	// or the SharedVS FQDN (Shared-L7-1.com).
+
 	found, oscNamespaceName := objects.SharedCRDLister().GetFQDNToOAuthSamlConfigMapping(host)
 	deleteCase := false
 	if !found {
@@ -382,41 +382,45 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
 			return
 		}
 	}
-
 	var crdStatus lib.CRDMetadata
 
 	if !deleteCase {
-		copier.Copy(vsNode, &oauthSamlConfig.Spec)
-		vsNode.AviVsNodeCommonFields.ConvertToRef()
-		vsNode.AviVsNodeGeneratedFields.ConvertToRef()
+		copier.CopyWithOption(vsNode, &oauthSamlConfig.Spec, copier.Option{IgnoreEmpty: true, DeepCopy: true})
+		//setting the fqdn to nil so that fqdn for child vs is not populated
+		generatedFields := vsNode.GetGenerateFields()
+		generatedFields.Fqdn = nil
+		generatedFields.ConvertToRef()
 		if oauthSamlConfig.Spec.OauthVsConfig != nil {
 			if len(oauthSamlConfig.Spec.OauthVsConfig.OauthSettings) != 0 {
 				for i, oauthSetting := range oauthSamlConfig.Spec.OauthVsConfig.OauthSettings {
 					if oauthSetting.AppSettings != nil {
+						// getting clientSecret from k8s secret
 						clientSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.AppSettings.ClientSecret)
 						if err != nil || clientSecretObj == nil {
 							utils.AviLog.Errorf("key: %s, msg: Client secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.AppSettings.ClientSecret, err)
 							return
 						}
 						clientSecretString := string(clientSecretObj.Data["clientSecret"])
-						vsNode.OauthVsConfig.OauthSettings[i].AppSettings.ClientSecret = &clientSecretString
+						generatedFields.OauthVsConfig.OauthSettings[i].AppSettings.ClientSecret = &clientSecretString
 					}
 					if oauthSetting.ResourceServer != nil {
-						//if oauthSetting.ResourceServer.JwtParams != nil {
 						if oauthSetting.ResourceServer.OpaqueTokenParams != nil {
+							// getting serverSecret from k8s secret
 							serverSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret)
 							if err != nil || serverSecretObj == nil {
 								utils.AviLog.Errorf("key: %s, msg: Server secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret, err)
 								return
 							}
 							serverSecretString := string(serverSecretObj.Data["serverSecret"])
-							vsNode.OauthVsConfig.OauthSettings[i].ResourceServer.OpaqueTokenParams.ServerSecret = &serverSecretString
+							generatedFields.OauthVsConfig.OauthSettings[i].ResourceServer.OpaqueTokenParams.ServerSecret = &serverSecretString
+						} else {
+							// setting IntrospectionDataTimeout to nil if jwt params are set
+							oauthSetting.ResourceServer.IntrospectionDataTimeout = nil
 						}
 					}
 				}
 			}
 		}
-		//if oauthSamlConfig.Spec.SAMLSPConfig != nil {
 
 		crdStatus = lib.CRDMetadata{
 			Type:   "OAuthSamlConfig",
@@ -426,6 +430,11 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode *AviEvhVsNode) {
 
 		utils.AviLog.Infof("key: %s, Successfully attached OAuthSamlConfig %s on vsNode %s", key, oscNamespaceName, vsNode.GetName())
 	} else {
+		generatedFields := vsNode.GetGenerateFields()
+		generatedFields.OauthVsConfig = nil
+		generatedFields.SamlSpConfig = nil
+		generatedFields.SsoPolicyRef = nil
+		generatedFields.Fqdn = nil
 		if vsNode.GetServiceMetadata().CRDStatus.Value != "" {
 			crdStatus = vsNode.GetServiceMetadata().CRDStatus
 			crdStatus.Status = lib.CRDInactive
