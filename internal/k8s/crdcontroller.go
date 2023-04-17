@@ -29,8 +29,10 @@ import (
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/lib"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/objects"
 	akov1alpha1 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha1"
+	akov1alpha2 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	akocrd "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha1/clientset/versioned"
 	akoinformers "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha1/informers/externalversions"
+	v1alpha2akoinformers "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha2/informers/externalversions"
 
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 
@@ -45,10 +47,15 @@ func NewCRDInformers(cs akocrd.Interface) {
 	httpRuleInformer := akoInformerFactory.Ako().V1alpha1().HTTPRules()
 	aviSettingsInformer := akoInformerFactory.Ako().V1alpha1().AviInfraSettings()
 
+	v1alpha2akoInformerFactory := v1alpha2akoinformers.NewSharedInformerFactoryWithOptions(
+		lib.AKOControlConfig().V1alpha2CRDClientset(), time.Second*30)
+	oauthSamlConfigInformer := v1alpha2akoInformerFactory.Ako().V1alpha2().OAuthSamlConfigs()
+
 	lib.AKOControlConfig().SetCRDInformers(&lib.AKOCrdInformers{
 		HostRuleInformer:        hostRuleInformer,
 		HTTPRuleInformer:        httpRuleInformer,
 		AviInfraSettingInformer: aviSettingsInformer,
+		OAuthSamlConfigInformer: oauthSamlConfigInformer,
 	})
 }
 
@@ -96,6 +103,17 @@ func isAviInfraUpdated(oldAviInfra, newAviInfra *akov1alpha1.AviInfraSetting) bo
 
 	oldSpecHash := utils.Hash(utils.Stringify(oldAviInfra.Spec) + oldAviInfra.Status.Status)
 	newSpecHash := utils.Hash(utils.Stringify(newAviInfra.Spec) + newAviInfra.Status.Status)
+
+	return oldSpecHash != newSpecHash
+}
+
+func isOAuthSamlConfigUpdated(oldOAuthSamlConfig, newOAuthSamlConfig *akov1alpha2.OAuthSamlConfig) bool {
+	if oldOAuthSamlConfig.ResourceVersion == newOAuthSamlConfig.ResourceVersion {
+		return false
+	}
+
+	oldSpecHash := utils.Hash(utils.Stringify(oldOAuthSamlConfig.Spec) + oldOAuthSamlConfig.Status.Status)
+	newSpecHash := utils.Hash(utils.Stringify(newOAuthSamlConfig.Spec) + newOAuthSamlConfig.Status.Status)
 
 	return oldSpecHash != newSpecHash
 }
@@ -297,6 +315,67 @@ func (c *AviController) SetupAKOCRDEventHandlers(numWorkers uint32) {
 		}
 
 		informer.AviInfraSettingInformer.Informer().AddEventHandler(aviInfraEventHandler)
+	}
+
+	if lib.AKOControlConfig().OAuthSamlConfigEnabled() {
+		oauthSamlConfigEventHandler := cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				if c.DisableSync {
+					return
+				}
+				oauthSamlConfig := obj.(*akov1alpha2.OAuthSamlConfig)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
+				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
+				if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfig); err != nil {
+					utils.AviLog.Warnf("key: %s, msg: Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+				}
+				utils.AviLog.Debugf("key: %s, msg: ADD", key)
+				bkt := utils.Bkt(namespace, numWorkers)
+				c.workqueue[bkt].AddRateLimited(key)
+			},
+			UpdateFunc: func(old, new interface{}) {
+				if c.DisableSync {
+					return
+				}
+				oldObj := old.(*akov1alpha2.OAuthSamlConfig)
+				oauthSamlConfig := new.(*akov1alpha2.OAuthSamlConfig)
+				if isOAuthSamlConfigUpdated(oldObj, oauthSamlConfig) {
+					namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
+					key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
+					if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfig); err != nil {
+						utils.AviLog.Warnf("key: %s, Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+					}
+					utils.AviLog.Debugf("key: %s, msg: UPDATE", key)
+					bkt := utils.Bkt(namespace, numWorkers)
+					c.workqueue[bkt].AddRateLimited(key)
+				}
+			},
+			DeleteFunc: func(obj interface{}) {
+				if c.DisableSync {
+					return
+				}
+				oauthSamlConfig, ok := obj.(*akov1alpha2.OAuthSamlConfig)
+				if !ok {
+					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+					if !ok {
+						utils.AviLog.Errorf("couldn't get object from tombstone %#v", obj)
+						return
+					}
+					oauthSamlConfig, ok = tombstone.Obj.(*akov1alpha2.OAuthSamlConfig)
+					if !ok {
+						utils.AviLog.Errorf("Tombstone contained object that is not an OAuthSamlConfig: %#v", obj)
+						return
+					}
+				}
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
+				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
+				utils.AviLog.Debugf("key: %s, msg: DELETE", key)
+				objects.SharedResourceVerInstanceLister().Delete(key)
+				bkt := utils.Bkt(namespace, numWorkers)
+				c.workqueue[bkt].AddRateLimited(key)
+			},
+		}
+		informer.OAuthSamlConfigInformer.Informer().AddEventHandler(oauthSamlConfigEventHandler)
 	}
 	return
 }
@@ -668,6 +747,8 @@ var refModelMap = map[string]string{
 	"PKIProfile":             "pkiprofile",
 	"ServiceEngineGroup":     "serviceenginegroup",
 	"Network":                "network",
+	"SSOPolicy":              "ssopolicy",
+	"AuthProfile":            "authprofile",
 }
 
 // checkRefOnController checks whether a provided ref on the controller

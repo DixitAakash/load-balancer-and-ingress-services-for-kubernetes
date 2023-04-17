@@ -91,6 +91,7 @@ const (
 	HostRule                                   = "HostRule"
 	HTTPRule                                   = "HTTPRule"
 	AviInfraSetting                            = "AviInfraSetting"
+	OAuthSamlConfig                            = "OAuthSamlConfig"
 	IstioVirtualService                        = "IstioVirtualService"
 	IstioDestinationRule                       = "DestinationRule"
 	IstioGateway                               = "IstioGateway"
