@@ -597,11 +597,7 @@ func (v *AviVsNode) SetVHDomainNames(domainNames []string) {
 	v.VHDomainNames = domainNames
 }
 
-func (v *AviVsNode) Get() AviVsEvhSniModel {
-	return v
-}
-
-func (v *AviVsNode) GetGenerateFields() *AviVsNodeGeneratedFields {
+func (v *AviVsNode) GetGeneratedFields() *AviVsNodeGeneratedFields {
 	return &v.AviVsNodeGeneratedFields
 }
 

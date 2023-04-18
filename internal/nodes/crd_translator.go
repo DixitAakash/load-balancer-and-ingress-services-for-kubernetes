@@ -387,7 +387,7 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 	if !deleteCase {
 		copier.CopyWithOption(vsNode, &oauthSamlConfig.Spec, copier.Option{IgnoreEmpty: true, DeepCopy: true})
 		//setting the fqdn to nil so that fqdn for child vs is not populated
-		generatedFields := vsNode.GetGenerateFields()
+		generatedFields := vsNode.GetGeneratedFields()
 		generatedFields.Fqdn = nil
 		generatedFields.ConvertToRef()
 		if oauthSamlConfig.Spec.OauthVsConfig != nil {
@@ -415,10 +415,16 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 							generatedFields.OauthVsConfig.OauthSettings[i].ResourceServer.OpaqueTokenParams.ServerSecret = &serverSecretString
 						} else {
 							// setting IntrospectionDataTimeout to nil if jwt params are set
-							oauthSetting.ResourceServer.IntrospectionDataTimeout = nil
+							generatedFields.OauthVsConfig.OauthSettings[i].ResourceServer.IntrospectionDataTimeout = nil
 						}
 					}
 				}
+			}
+		}
+
+		if oauthSamlConfig.Spec.SamlSpConfig != nil {
+			if *oauthSamlConfig.Spec.SamlSpConfig.AuthnReqAcsType != "SAML_AUTHN_REQ_ACS_TYPE_INDEX" {
+				generatedFields.SamlSpConfig.AcsIndex = nil
 			}
 		}
 
@@ -430,7 +436,7 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 
 		utils.AviLog.Infof("key: %s, Successfully attached OAuthSamlConfig %s on vsNode %s", key, oscNamespaceName, vsNode.GetName())
 	} else {
-		generatedFields := vsNode.GetGenerateFields()
+		generatedFields := vsNode.GetGeneratedFields()
 		generatedFields.OauthVsConfig = nil
 		generatedFields.SamlSpConfig = nil
 		generatedFields.SsoPolicyRef = nil

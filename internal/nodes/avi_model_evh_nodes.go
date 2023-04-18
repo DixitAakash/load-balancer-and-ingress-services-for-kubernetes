@@ -101,8 +101,7 @@ type AviVsEvhSniModel interface {
 }
 
 type GeneratedModel interface {
-	Get() AviVsEvhSniModel
-	GetGenerateFields() *AviVsNodeGeneratedFields
+	GetGeneratedFields() *AviVsNodeGeneratedFields
 	GetCommonFields() *AviVsNodeCommonFields
 }
 
@@ -316,11 +315,7 @@ func (v *AviEvhVsNode) SetVHDomainNames(domainNames []string) {
 	v.VHDomainNames = domainNames
 }
 
-func (v *AviEvhVsNode) Get() AviVsEvhSniModel {
-	return v
-}
-
-func (v *AviEvhVsNode) GetGenerateFields() *AviVsNodeGeneratedFields {
+func (v *AviEvhVsNode) GetGeneratedFields() *AviVsNodeGeneratedFields {
 	return &v.AviVsNodeGeneratedFields
 }
 
