@@ -216,7 +216,7 @@ func validateSecretReferenceInHostrule(namespace, secretName string) error {
 
 func validateSecretReferenceInOAuthSamlConfig(namespace, secretName string) (*v1.Secret, error) {
 
-	// reject the hostrule if the secret handling is restricted to the namespace where
+	// reject the OAuthSamlConfig if the secret handling is restricted to the namespace where
 	// AKO is installed.
 	if utils.GetInformers().RouteInformer != nil &&
 		namespace != utils.GetAKONamespace() &&
