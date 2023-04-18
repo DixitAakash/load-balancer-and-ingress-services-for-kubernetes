@@ -415,14 +415,6 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 	if oauthSamlConfig.Spec.OauthVsConfig != nil {
 		oauthConfigObj := oauthSamlConfig.Spec.OauthVsConfig
 
-		/*if oauthConfigObj.CookieTimeout != nil {
-			if *oauthConfigObj.CookieTimeout < 1 || *oauthConfigObj.CookieTimeout > 1440 {
-				err = fmt.Errorf("CookieTimeout %d is not valid. Allowed values are 1-1440", *oauthConfigObj.CookieTimeout)
-				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
-				return err
-			}
-		}*/
-
 		if len(oauthConfigObj.OauthSettings) != 0 {
 			for _, profile := range oauthConfigObj.OauthSettings {
 				refData[*profile.AuthProfileRef] = "AuthProfile"
@@ -430,13 +422,11 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 				if profile.AppSettings != nil {
 					clientSecret := *profile.AppSettings.ClientSecret
 					clientSecretObj, err := validateSecretReferenceInOAuthSamlConfig(oauthSamlConfig.Namespace, clientSecret)
-					//clientSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(oauthSamlConfig.Namespace).Get(context.TODO(), clientSecretRef, metav1.GetOptions{})
 					if err != nil {
 						err = fmt.Errorf("Got error while fetching %s secret : %s", clientSecret, err.Error())
 						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
-					//clientSecret, _, err := controllerInstance.GetOAuthClientServerSecret(clientSecretRef, oauthSamlConfig.Namespace)
 					if clientSecretObj == nil {
 						err = fmt.Errorf("specified client secret is empty : %s", clientSecret)
 						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
@@ -448,7 +438,6 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
-					//lib.OAuthSecretMap.Store(oauthSamlConfig.Namespace+"/"+clientSecretRef+"/"+"Client", clientSecret)
 				}
 
 				if profile.ResourceServer != nil {
@@ -462,13 +451,7 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
-					/*if profile.ResourceServer.IntrospectionDataTimeout != nil {
-						if *profile.ResourceServer.IntrospectionDataTimeout < 0 || *profile.ResourceServer.IntrospectionDataTimeout > 1440 {
-							err = fmt.Errorf("IntrospectionDataTimeout %d is not valid. Allowed values are 0-1440", *profile.ResourceServer.IntrospectionDataTimeout)
-							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
-							return err
-						}
-					}*/
+
 					if profile.ResourceServer.OpaqueTokenParams != nil {
 						serverSecret := *profile.ResourceServer.OpaqueTokenParams.ServerSecret
 						serverSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(oauthSamlConfig.Namespace).Get(context.TODO(), serverSecret, metav1.GetOptions{})
@@ -477,7 +460,6 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 							return err
 						}
-						//_, serverSecret, err := controllerInstance.GetOAuthClientServerSecret(serverSecretRef, oauthSamlConfig.Namespace)
 						if serverSecretObj == nil {
 							err = fmt.Errorf("specified server secret is empty : %s", serverSecret)
 							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
@@ -489,7 +471,6 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 							return err
 						}
-						//lib.OAuthSecretMap.Store(oauthSamlConfig.Namespace+"/"+serverSecretRef+"/"+"Server", serverSecret)
 					}
 				}
 			}
@@ -497,20 +478,7 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 	}
 	if oauthSamlConfig.Spec.SamlSpConfig != nil {
 		samlConfigObj := oauthSamlConfig.Spec.SamlSpConfig
-		/*if samlConfigObj.AcsIndex != nil {
-			if *samlConfigObj.AcsIndex < 0 || *samlConfigObj.AcsIndex > 64 {
-				err = fmt.Errorf("AcsIndex %d is not valid. Allowed values are 0-64", *samlConfigObj.AcsIndex)
-				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
-				return err
-			}
-		}*/
-		/*if samlConfigObj.CookieTimeout != nil {
-			if *samlConfigObj.CookieTimeout < 1 || *samlConfigObj.CookieTimeout > 1440 {
-				err = fmt.Errorf("CookieTimeout %d is not valid. Allowed values are 1-1440", *samlConfigObj.CookieTimeout)
-				status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
-				return err
-			}
-		}*/
+
 		if samlConfigObj.SigningSslKeyAndCertificateRef != nil {
 			refData[*samlConfigObj.SigningSslKeyAndCertificateRef] = "SslKeyCert"
 		}
