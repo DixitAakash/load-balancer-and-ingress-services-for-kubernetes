@@ -385,7 +385,7 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 	var crdStatus lib.CRDMetadata
 
 	if !deleteCase {
-		copier.CopyWithOption(vsNode, &oauthSamlConfig.Spec, copier.Option{IgnoreEmpty: true, DeepCopy: true})
+		copier.CopyWithOption(vsNode, &oauthSamlConfig.Spec, copier.Option{DeepCopy: true})
 		//setting the fqdn to nil so that fqdn for child vs is not populated
 		generatedFields := vsNode.GetGeneratedFields()
 		generatedFields.Fqdn = nil
@@ -427,7 +427,6 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 				generatedFields.SamlSpConfig.AcsIndex = nil
 			}
 		}
-
 		crdStatus = lib.CRDMetadata{
 			Type:   "OAuthSamlConfig",
 			Value:  oauthSamlConfig.Namespace + "/" + oauthSamlConfig.Name,
