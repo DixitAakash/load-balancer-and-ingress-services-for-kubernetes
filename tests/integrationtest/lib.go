@@ -35,11 +35,13 @@ import (
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/objects"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/api"
 	akov1alpha1 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha1"
+	akov1alpha2 "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	crdfake "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha1/clientset/versioned/fake"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 
 	"github.com/onsi/gomega"
 	"github.com/vmware/alb-sdk/go/models"
+	"google.golang.org/protobuf/proto"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1"
@@ -1372,11 +1374,136 @@ func SetupHostRule(t *testing.T, hrname, fqdn string, secure bool, gslbHost ...s
 	}
 }
 
+type FakeOAuthSamlConfig struct {
+	Name              string
+	Namespace         string
+	Fqdn              string
+	OAuthEnabled      bool
+	OpaqueTokenParams bool
+	Oidc              bool
+}
+
+func (osc FakeOAuthSamlConfig) OAuthSamlConfig() *akov1alpha2.OAuthSamlConfig {
+	//enable := true
+	var oidcConfig *akov1alpha2.OIDCConfig
+	var opaqueTokenParams *akov1alpha2.OpaqueTokenValidationParams
+	var jwtParams *akov1alpha2.JWTValidationParams
+	var accessType *string
+	var oauthVsConfig *akov1alpha2.OAuthVSConfig
+	var ssoPolicyRef *string
+	var samlSpConfig *akov1alpha2.SAMLSPConfig
+
+	if osc.OAuthEnabled {
+		if osc.Oidc {
+			oidcConfig = &akov1alpha2.OIDCConfig{
+				OidcEnable: proto.Bool(true),
+				Profile:    proto.Bool(true),
+				Userinfo:   proto.Bool(true),
+			}
+		} else {
+			oidcConfig = &akov1alpha2.OIDCConfig{
+				OidcEnable: proto.Bool(false),
+				Profile:    proto.Bool(false),
+				Userinfo:   proto.Bool(false),
+			}
+		}
+
+		if osc.OpaqueTokenParams {
+			accessType = proto.String("ACCESS_TOKEN_TYPE_OPAQUE")
+			opaqueTokenParams = &akov1alpha2.OpaqueTokenValidationParams{
+				ServerID:     proto.String("my-server-id"),
+				ServerSecret: proto.String("my-oauth-secret"),
+			}
+		} else {
+			accessType = proto.String("ACCESS_TOKEN_TYPE_JWT")
+			jwtParams = &akov1alpha2.JWTValidationParams{
+				Audience: proto.String("my-audience"),
+			}
+		}
+
+		oauthVsConfig = &akov1alpha2.OAuthVSConfig{
+			CookieName:    proto.String("MY_OAUTH_COOKIE"),
+			CookieTimeout: proto.Int32(120),
+			LogoutURI:     proto.String("https://auth.com/oauth/logout"),
+			OauthSettings: []*akov1alpha2.OAuthSettings{
+				{
+					AppSettings: &akov1alpha2.OAuthAppSettings{
+						ClientID:     proto.String("my-client-id"),
+						ClientSecret: proto.String("my-oauth-secret"),
+						OidcConfig:   oidcConfig,
+						Scopes: []string{
+							"scope-1",
+						},
+					},
+					AuthProfileRef: proto.String("thisisaviref-authprofileoauth"),
+					ResourceServer: &akov1alpha2.OAuthResourceServer{
+						AccessType:               accessType,
+						IntrospectionDataTimeout: proto.Int32(60),
+						OpaqueTokenParams:        opaqueTokenParams,
+						JwtParams:                jwtParams,
+					},
+				},
+			},
+			RedirectURI:           proto.String("https://auth.com/oauth/redirect"),
+			PostLogoutRedirectURI: proto.String("https://auth.com/oauth/post-logout-redirect"),
+		}
+		ssoPolicyRef = proto.String("thisisaviref-ssopolicyoauth")
+	} else {
+		samlSpConfig = &akov1alpha2.SAMLSPConfig{
+			AcsIndex:                       nil,
+			AuthnReqAcsType:                proto.String("SAML_AUTHN_REQ_ACS_TYPE_NONE"),
+			CookieName:                     proto.String("MY_SAML_COOKIE"),
+			CookieTimeout:                  proto.Int32(120),
+			EntityID:                       proto.String("my-entityid"),
+			SigningSslKeyAndCertificateRef: proto.String("thisisaviref-sslkeyandcertrefsaml"),
+			SingleSignonURL:                proto.String("https://auth.com/sso/acs/"),
+			UseIdpSessionTimeout:           proto.Bool(false),
+		}
+		ssoPolicyRef = proto.String("thisisaviref-ssopolicysaml")
+	}
+
+	oauthSamlConfig := &akov1alpha2.OAuthSamlConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: osc.Namespace,
+			Name:      osc.Name,
+		},
+		Spec: akov1alpha2.OAuthSamlConfigSpec{
+			Fqdn:          proto.String(osc.Fqdn),
+			OauthVsConfig: oauthVsConfig,
+			SamlSpConfig:  samlSpConfig,
+			SsoPolicyRef:  ssoPolicyRef,
+		},
+	}
+	return oauthSamlConfig
+}
+
+func SetupOAuthSamlConfig(t *testing.T, oscname, fqdn string, oauthEnabled bool, opaqueTokenParams bool, oidc bool) {
+	oauthSamlConfig := FakeOAuthSamlConfig{
+		Name:              oscname,
+		Namespace:         "default",
+		Fqdn:              fqdn,
+		OAuthEnabled:      oauthEnabled,
+		OpaqueTokenParams: opaqueTokenParams,
+		Oidc:              oidc,
+	}
+	oscCreate := oauthSamlConfig.OAuthSamlConfig()
+	if _, err := lib.AKOControlConfig().V1alpha2CRDClientset().AkoV1alpha2().OAuthSamlConfigs("default").Create(context.TODO(), oscCreate, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("error in adding HostRule: %v", err)
+	}
+}
+
 func TeardownHostRule(t *testing.T, g *gomega.WithT, vskey cache.NamespaceName, hrname string) {
 	if err := lib.AKOControlConfig().CRDClientset().AkoV1alpha1().HostRules("default").Delete(context.TODO(), hrname, metav1.DeleteOptions{}); err != nil {
 		t.Fatalf("error in deleting HostRule: %v", err)
 	}
 	VerifyMetadataHostRule(t, g, vskey, "default/"+hrname, false)
+}
+
+func TeardownOAuthSamlConfig(t *testing.T, g *gomega.WithT, vskey cache.NamespaceName, oscname string) {
+	if err := lib.AKOControlConfig().V1alpha2CRDClientset().AkoV1alpha2().OAuthSamlConfigs("default").Delete(context.TODO(), oscname, metav1.DeleteOptions{}); err != nil {
+		t.Fatalf("error in deleting OAuthSamlConfig: %v", err)
+	}
+	VerifyMetadataOAuthSamlConfig(t, g, vskey, "default/"+oscname, false)
 }
 
 func TearDownHostRuleWithNoVerify(t *testing.T, g *gomega.WithT, hrname string) {
@@ -1486,6 +1613,46 @@ func VerifyMetadataHostRule(t *testing.T, g *gomega.WithT, vsKey cache.Namespace
 		if active {
 			if sniCacheObj.ServiceMetadataObj.CRDStatus.Value != hrnsname {
 				t.Logf("Expected CRD ServiceMetadata Value to be %s, found %s", hrnsname, sniCacheObj.ServiceMetadataObj.CRDStatus.Value)
+				return false, nil
+			}
+
+			if sniCacheObj.ServiceMetadataObj.CRDStatus.Status != lib.CRDActive {
+				t.Logf("Expected CRD ServiceMetadata Status to be %s, found %s", lib.CRDActive, sniCacheObj.ServiceMetadataObj.CRDStatus.Status)
+				return false, nil
+			}
+		}
+
+		if !active && (sniCacheObj.ServiceMetadataObj.CRDStatus.Status == lib.CRDActive) {
+			t.Logf("Expected CRD ServiceMetadata Status to be empty/inactive, found %s", sniCacheObj.ServiceMetadataObj.CRDStatus.Status)
+			return false, nil
+		}
+
+		return true, nil
+	})
+}
+
+func VerifyMetadataOAuthSamlConfig(t *testing.T, g *gomega.WithT, vsKey cache.NamespaceName, oscnsname string, active bool) {
+	mcache := cache.SharedAviObjCache()
+	wait.Poll(2*time.Second, 50*time.Second, func() (bool, error) {
+		sniCache, found := mcache.VsCacheMeta.AviCacheGet(vsKey)
+		if active && !found {
+			t.Logf("SNI Cache not found.")
+			return false, nil
+		}
+
+		if !active && !found {
+			return true, nil
+		}
+
+		sniCacheObj, ok := sniCache.(*cache.AviVsCache)
+		if !ok {
+			t.Logf("Unable to cast SNI Cache to AviVsCache.")
+			return false, nil
+		}
+
+		if active {
+			if sniCacheObj.ServiceMetadataObj.CRDStatus.Value != oscnsname {
+				t.Logf("Expected CRD ServiceMetadata Value to be %s, found %s", oscnsname, sniCacheObj.ServiceMetadataObj.CRDStatus.Value)
 				return false, nil
 			}
 
