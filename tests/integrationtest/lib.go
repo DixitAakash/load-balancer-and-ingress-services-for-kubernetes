@@ -1954,3 +1954,20 @@ func DeleteLease(ns string) error {
 	err := KubeClient.CoordinationV1().Leases(ns).Delete(context.TODO(), "ako-lease-lock", metav1.DeleteOptions{})
 	return err
 }
+
+func SetUpOAuthSecret() (err error) {
+	data := map[string][]byte{
+		"clientSecret": []byte("my-client-secret"),
+		"serverSecret": []byte("my-server-secret"),
+	}
+
+	object := metav1.ObjectMeta{Name: "my-oauth-secret", Namespace: "default"}
+	secret := &corev1.Secret{Data: data, ObjectMeta: object}
+	_, err = KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+	return
+}
+
+func TearDownOAuthSecret() (err error) {
+	err = KubeClient.CoreV1().Secrets("default").Delete(context.TODO(), "my-oauth-secret", metav1.DeleteOptions{})
+	return
+}
