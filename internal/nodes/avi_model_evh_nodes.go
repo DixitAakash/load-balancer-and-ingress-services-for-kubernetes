@@ -97,10 +97,6 @@ type AviVsEvhSniModel interface {
 	GetVHDomainNames() []string
 	SetVHDomainNames([]string)
 
-	GeneratedModel
-}
-
-type GeneratedModel interface {
 	GetGeneratedFields() *AviVsNodeGeneratedFields
 	GetCommonFields() *AviVsNodeCommonFields
 }

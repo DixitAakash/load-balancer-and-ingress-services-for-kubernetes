@@ -22,8 +22,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	// avimodels "github.com/vmware/alb-sdk/go/models"
-
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 )

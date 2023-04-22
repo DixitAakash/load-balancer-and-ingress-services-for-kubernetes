@@ -117,7 +117,7 @@ var (
 		GetParentMultiClusterIngresses: ServiceImportToMultiClusterIng,
 	}
 	OAuthSamlConfig = GraphSchema{
-		Type:               "OAuthSamlConfig",
+		Type:               lib.OAuthSamlConfig,
 		GetParentIngresses: OAuthSamlConfigToIng,
 		GetParentRoutes:    OAuthSamlConfigToIng,
 	}
