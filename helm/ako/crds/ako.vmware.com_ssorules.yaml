@@ -2,25 +2,25 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   creationTimestamp: null
-  name: oauthsamlconfigs.ako.vmware.com
+  name: ssorules.ako.vmware.com
 spec:
   conversion:
     strategy: None
   group: ako.vmware.com
   names:
-    kind: OAuthSamlConfig
-    listKind: OAuthSamlConfigList
-    plural: oauthsamlconfigs
+    kind: SSORule
+    listKind: SSORuleList
+    plural: ssorules
     shortNames:
-    - oauthsamlconfig
+    - ssorule
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: Status of the OAuthSamlConfig object.
+    - description: Status of the SSORule object.
       jsonPath: .status.status
       name: Status
       type: string
-    - description: Creation timestamp of the OAuthSamlConfig object.
+    - description: Creation timestamp of the SSORule object.
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -36,8 +36,8 @@ spec:
               - samlSpConfig
             properties:
               fqdn:
-                description: Fqdn to be used to apply the OAuthSamlConfig CRD object
-                  to a virtual service. The virtual service should host the Fqdn mentioned
+                description: Fqdn to be used to apply the SSORule CRD object to a
+                  virtual service. The virtual service should host the Fqdn mentioned
                   in this field.
                 type: string
               oauthVsConfig:

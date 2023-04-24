@@ -35,7 +35,7 @@ type Validator interface {
 	ValidateAviInfraSetting(key string, infraSetting *akov1alpha1.AviInfraSetting) error
 	ValidateMultiClusterIngressObj(key string, multiClusterIngress *akov1alpha1.MultiClusterIngress) error
 	ValidateServiceImportObj(key string, serviceImport *akov1alpha1.ServiceImport) error
-	ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error
+	ValidateSSORuleObj(key string, ssoRule *akov1alpha2.SSORule) error
 }
 
 type (
@@ -214,9 +214,9 @@ func validateSecretReferenceInHostrule(namespace, secretName string) error {
 	return err
 }
 
-func validateSecretReferenceInOAuthSamlConfig(namespace, secretName string) (*v1.Secret, error) {
+func validateSecretReferenceInSSORule(namespace, secretName string) (*v1.Secret, error) {
 
-	// reject the OAuthSamlConfig if the secret handling is restricted to the namespace where
+	// reject the SSORule if the secret handling is restricted to the namespace where
 	// AKO is installed.
 	if utils.GetInformers().RouteInformer != nil &&
 		namespace != utils.GetAKONamespace() &&
@@ -391,29 +391,29 @@ func (l *leader) ValidateServiceImportObj(key string, serviceImport *akov1alpha1
 	return nil
 }
 
-// ValidateOAuthSamlConfigObj would do validation checks
+// ValidateSSORuleObj would do validation checks
 // update internal CRD caches, and push relevant ingresses to ingestion
-func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error {
+func (l *leader) ValidateSSORuleObj(key string, ssoRule *akov1alpha2.SSORule) error {
 	var err error
-	fqdn := *oauthSamlConfig.Spec.Fqdn
-	foundHost, foundOSC := objects.SharedCRDLister().GetFQDNToOAuthSamlConfigMapping(fqdn)
-	if foundHost && foundOSC != oauthSamlConfig.Namespace+"/"+oauthSamlConfig.Name {
-		err = fmt.Errorf("duplicate fqdn %s found in %s", fqdn, foundOSC)
-		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+	fqdn := *ssoRule.Spec.Fqdn
+	foundHost, foundSR := objects.SharedCRDLister().GetFQDNToSSORuleMapping(fqdn)
+	if foundHost && foundSR != ssoRule.Namespace+"/"+ssoRule.Name {
+		err = fmt.Errorf("duplicate fqdn %s found in %s", fqdn, foundSR)
+		status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 		return err
 	}
 
 	refData := make(map[string]string)
 
-	if oauthSamlConfig.Spec.SsoPolicyRef == nil {
+	if ssoRule.Spec.SsoPolicyRef == nil {
 		err = fmt.Errorf("SsoPolicyRef is not specified")
-		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+		status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 		return err
 	}
-	refData[*oauthSamlConfig.Spec.SsoPolicyRef] = "SSOPolicy"
+	refData[*ssoRule.Spec.SsoPolicyRef] = "SSOPolicy"
 
-	if oauthSamlConfig.Spec.OauthVsConfig != nil {
-		oauthConfigObj := oauthSamlConfig.Spec.OauthVsConfig
+	if ssoRule.Spec.OauthVsConfig != nil {
+		oauthConfigObj := ssoRule.Spec.OauthVsConfig
 
 		if len(oauthConfigObj.OauthSettings) != 0 {
 			for _, profile := range oauthConfigObj.OauthSettings {
@@ -421,21 +421,21 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 
 				if profile.AppSettings != nil {
 					clientSecret := *profile.AppSettings.ClientSecret
-					clientSecretObj, err := validateSecretReferenceInOAuthSamlConfig(oauthSamlConfig.Namespace, clientSecret)
+					clientSecretObj, err := validateSecretReferenceInSSORule(ssoRule.Namespace, clientSecret)
 					if err != nil {
 						err = fmt.Errorf("Got error while fetching %s secret : %s", clientSecret, err.Error())
-						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
 					if clientSecretObj == nil {
 						err = fmt.Errorf("specified client secret is empty : %s", clientSecret)
-						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
 					clientSecretString := string(clientSecretObj.Data["clientSecret"])
 					if clientSecretString == "" {
 						err = fmt.Errorf("clientSecret field not found in %s secret", clientSecret)
-						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
 				}
@@ -443,32 +443,32 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 				if profile.ResourceServer != nil {
 					if *profile.ResourceServer.AccessType == "ACCESS_TOKEN_TYPE_JWT" && profile.ResourceServer.JwtParams == nil {
 						err = fmt.Errorf("Access Type is %s, but Jwt Params have not been specified", *profile.ResourceServer.AccessType)
-						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
 					if *profile.ResourceServer.AccessType == "ACCESS_TOKEN_TYPE_OPAQUE" && profile.ResourceServer.OpaqueTokenParams == nil {
 						err = fmt.Errorf("Access Type is %s, but Opaque Token Params have not been specified", *profile.ResourceServer.AccessType)
-						status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+						status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 						return err
 					}
 
 					if profile.ResourceServer.OpaqueTokenParams != nil {
 						serverSecret := *profile.ResourceServer.OpaqueTokenParams.ServerSecret
-						serverSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(oauthSamlConfig.Namespace).Get(context.TODO(), serverSecret, metav1.GetOptions{})
+						serverSecretObj, err := utils.GetInformers().ClientSet.CoreV1().Secrets(ssoRule.Namespace).Get(context.TODO(), serverSecret, metav1.GetOptions{})
 						if err != nil {
 							err = fmt.Errorf("Got error while fetching %s secret : %s", serverSecret, err.Error())
-							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 							return err
 						}
 						if serverSecretObj == nil {
 							err = fmt.Errorf("specified server secret is empty : %s", serverSecret)
-							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 							return err
 						}
 						serverSecretString := string(serverSecretObj.Data["serverSecret"])
 						if serverSecretString == "" {
 							err = fmt.Errorf("serverSecret field not found in %s secret", serverSecret)
-							status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+							status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 							return err
 						}
 					}
@@ -476,8 +476,8 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 			}
 		}
 	}
-	if oauthSamlConfig.Spec.SamlSpConfig != nil {
-		samlConfigObj := oauthSamlConfig.Spec.SamlSpConfig
+	if ssoRule.Spec.SamlSpConfig != nil {
+		samlConfigObj := ssoRule.Spec.SamlSpConfig
 
 		if samlConfigObj.SigningSslKeyAndCertificateRef != nil {
 			refData[*samlConfigObj.SigningSslKeyAndCertificateRef] = "SslKeyCert"
@@ -485,16 +485,16 @@ func (l *leader) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1al
 	}
 
 	if err := checkRefsOnController(key, refData); err != nil {
-		status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
+		status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusRejected, Error: err.Error()})
 		return err
 	}
 
-	// No need to update status of oauthSamlConfig object as accepted since it was accepted before.
-	if oauthSamlConfig.Status.Status == lib.StatusAccepted {
+	// No need to update status of ssoRule object as accepted since it was accepted before.
+	if ssoRule.Status.Status == lib.StatusAccepted {
 		return nil
 	}
 
-	status.UpdateOAuthSamlConfigStatus(key, oauthSamlConfig, status.UpdateCRDStatusOptions{Status: lib.StatusAccepted, Error: ""})
+	status.UpdateSSORuleStatus(key, ssoRule, status.UpdateCRDStatusOptions{Status: lib.StatusAccepted, Error: ""})
 	return nil
 }
 
@@ -526,7 +526,7 @@ func (f *follower) ValidateServiceImportObj(key string, serviceImport *akov1alph
 	return nil
 }
 
-func (f *follower) ValidateOAuthSamlConfigObj(key string, oauthSamlConfig *akov1alpha2.OAuthSamlConfig) error {
-	utils.AviLog.Debugf("key: %s, AKO is not a leader, not validating OAuthSamlConfig object", key)
+func (f *follower) ValidateSSORuleObj(key string, ssoRule *akov1alpha2.SSORule) error {
+	utils.AviLog.Debugf("key: %s, AKO is not a leader, not validating SSORule object", key)
 	return nil
 }

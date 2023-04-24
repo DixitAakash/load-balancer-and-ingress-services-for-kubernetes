@@ -18,10 +18,10 @@ limitations under the License.
 
 package v1alpha2
 
-// OAuthSamlConfigListerExpansion allows custom methods to be added to
-// OAuthSamlConfigLister.
-type OAuthSamlConfigListerExpansion interface{}
+// SSORuleListerExpansion allows custom methods to be added to
+// SSORuleLister.
+type SSORuleListerExpansion interface{}
 
-// OAuthSamlConfigNamespaceListerExpansion allows custom methods to be added to
-// OAuthSamlConfigNamespaceLister.
-type OAuthSamlConfigNamespaceListerExpansion interface{}
+// SSORuleNamespaceListerExpansion allows custom methods to be added to
+// SSORuleNamespaceLister.
+type SSORuleNamespaceListerExpansion interface{}

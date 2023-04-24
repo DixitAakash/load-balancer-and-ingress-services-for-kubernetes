@@ -58,7 +58,7 @@ type AKOCrdInformers struct {
 	HostRuleInformer        akoinformer.HostRuleInformer
 	HTTPRuleInformer        akoinformer.HTTPRuleInformer
 	AviInfraSettingInformer akoinformer.AviInfraSettingInformer
-	OAuthSamlConfigInformer v1alpha2akoinformer.OAuthSamlConfigInformer
+	SSORuleInformer         v1alpha2akoinformer.SSORuleInformer
 }
 
 type IstioCRDInformers struct {
@@ -114,9 +114,9 @@ type akoControlConfig struct {
 	// client-set and informer for v1alpha2 of AKO CRD.
 	v1alpha2crdClientset v1alpha2akocrd.Interface
 
-	// oauthSamlConfigEnabled is set to true if the cluster has
-	// OAuthSamlConfig CRD installed.
-	oauthSamlConfigEnabled bool
+	// ssoRuleEnabled is set to true if the cluster has
+	// SSORule CRD installed.
+	ssoRuleEnabled bool
 
 	// licenseType holds the default license tier which would be used by new Clouds. Enum options - ENTERPRISE_16, ENTERPRISE, ENTERPRISE_18, BASIC, ESSENTIALS.
 	licenseType string
@@ -265,13 +265,13 @@ func (c *akoControlConfig) SetCRDEnabledParams(cs akocrd.Interface) {
 
 func (c *akoControlConfig) Setv1alpha2CRDEnabledParams(cs v1alpha2akocrd.Interface) {
 	timeout := int64(120)
-	_, oauthSamlErr := cs.AkoV1alpha2().OAuthSamlConfigs(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{TimeoutSeconds: &timeout})
-	if oauthSamlErr != nil {
-		utils.AviLog.Infof("ako.vmware.com/v1alpha2/OAuthSamlConfig not found/enabled on cluster: %v", oauthSamlErr)
-		c.oauthSamlConfigEnabled = false
+	_, ssoRuleErr := cs.AkoV1alpha2().SSORules(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{TimeoutSeconds: &timeout})
+	if ssoRuleErr != nil {
+		utils.AviLog.Infof("ako.vmware.com/v1alpha2/SSORule not found/enabled on cluster: %v", ssoRuleErr)
+		c.ssoRuleEnabled = false
 	} else {
-		utils.AviLog.Infof("ako.vmware.com/v1alpha2/OAuthSamlConfig enabled on cluster")
-		c.oauthSamlConfigEnabled = true
+		utils.AviLog.Infof("ako.vmware.com/v1alpha2/SSORule enabled on cluster")
+		c.ssoRuleEnabled = true
 	}
 }
 
@@ -287,8 +287,8 @@ func (c *akoControlConfig) HttpRuleEnabled() bool {
 	return c.httpRuleEnabled
 }
 
-func (c *akoControlConfig) OAuthSamlConfigEnabled() bool {
-	return c.oauthSamlConfigEnabled
+func (c *akoControlConfig) SsoRuleEnabled() bool {
+	return c.ssoRuleEnabled
 }
 
 func (c *akoControlConfig) ControllerVersion() string {

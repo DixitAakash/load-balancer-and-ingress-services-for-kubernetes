@@ -49,13 +49,13 @@ func NewCRDInformers(cs akocrd.Interface) {
 
 	v1alpha2akoInformerFactory := v1alpha2akoinformers.NewSharedInformerFactoryWithOptions(
 		lib.AKOControlConfig().V1alpha2CRDClientset(), time.Second*30)
-	oauthSamlConfigInformer := v1alpha2akoInformerFactory.Ako().V1alpha2().OAuthSamlConfigs()
+	ssoRuleInformer := v1alpha2akoInformerFactory.Ako().V1alpha2().SSORules()
 
 	lib.AKOControlConfig().SetCRDInformers(&lib.AKOCrdInformers{
 		HostRuleInformer:        hostRuleInformer,
 		HTTPRuleInformer:        httpRuleInformer,
 		AviInfraSettingInformer: aviSettingsInformer,
-		OAuthSamlConfigInformer: oauthSamlConfigInformer,
+		SSORuleInformer:         ssoRuleInformer,
 	})
 }
 
@@ -107,13 +107,13 @@ func isAviInfraUpdated(oldAviInfra, newAviInfra *akov1alpha1.AviInfraSetting) bo
 	return oldSpecHash != newSpecHash
 }
 
-func isOAuthSamlConfigUpdated(oldOAuthSamlConfig, newOAuthSamlConfig *akov1alpha2.OAuthSamlConfig) bool {
-	if oldOAuthSamlConfig.ResourceVersion == newOAuthSamlConfig.ResourceVersion {
+func isSSORuleUpdated(oldSSORule, newSSORule *akov1alpha2.SSORule) bool {
+	if oldSSORule.ResourceVersion == newSSORule.ResourceVersion {
 		return false
 	}
 
-	oldSpecHash := utils.Hash(utils.Stringify(oldOAuthSamlConfig.Spec) + oldOAuthSamlConfig.Status.Status)
-	newSpecHash := utils.Hash(utils.Stringify(newOAuthSamlConfig.Spec) + newOAuthSamlConfig.Status.Status)
+	oldSpecHash := utils.Hash(utils.Stringify(oldSSORule.Spec) + oldSSORule.Status.Status)
+	newSpecHash := utils.Hash(utils.Stringify(newSSORule.Spec) + newSSORule.Status.Status)
 
 	return oldSpecHash != newSpecHash
 }
@@ -317,17 +317,17 @@ func (c *AviController) SetupAKOCRDEventHandlers(numWorkers uint32) {
 		informer.AviInfraSettingInformer.Informer().AddEventHandler(aviInfraEventHandler)
 	}
 
-	if lib.AKOControlConfig().OAuthSamlConfigEnabled() {
-		oauthSamlConfigEventHandler := cache.ResourceEventHandlerFuncs{
+	if lib.AKOControlConfig().SsoRuleEnabled() {
+		ssoRuleEventHandler := cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				if c.DisableSync {
 					return
 				}
-				oauthSamlConfig := obj.(*akov1alpha2.OAuthSamlConfig)
-				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
-				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
-				if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfig); err != nil {
-					utils.AviLog.Warnf("key: %s, msg: Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+				ssoRule := obj.(*akov1alpha2.SSORule)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(ssoRule))
+				key := lib.SSORule + "/" + utils.ObjKey(ssoRule)
+				if err := c.GetValidator().ValidateSSORuleObj(key, ssoRule); err != nil {
+					utils.AviLog.Warnf("key: %s, msg: Error retrieved during validation of SSORule: %v", key, err)
 				}
 				utils.AviLog.Debugf("key: %s, msg: ADD", key)
 				bkt := utils.Bkt(namespace, numWorkers)
@@ -337,13 +337,13 @@ func (c *AviController) SetupAKOCRDEventHandlers(numWorkers uint32) {
 				if c.DisableSync {
 					return
 				}
-				oldObj := old.(*akov1alpha2.OAuthSamlConfig)
-				oauthSamlConfig := new.(*akov1alpha2.OAuthSamlConfig)
-				if isOAuthSamlConfigUpdated(oldObj, oauthSamlConfig) {
-					namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
-					key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
-					if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfig); err != nil {
-						utils.AviLog.Warnf("key: %s, Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+				oldObj := old.(*akov1alpha2.SSORule)
+				ssoRule := new.(*akov1alpha2.SSORule)
+				if isSSORuleUpdated(oldObj, ssoRule) {
+					namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(ssoRule))
+					key := lib.SSORule + "/" + utils.ObjKey(ssoRule)
+					if err := c.GetValidator().ValidateSSORuleObj(key, ssoRule); err != nil {
+						utils.AviLog.Warnf("key: %s, Error retrieved during validation of SSORule: %v", key, err)
 					}
 					utils.AviLog.Debugf("key: %s, msg: UPDATE", key)
 					bkt := utils.Bkt(namespace, numWorkers)
@@ -354,28 +354,28 @@ func (c *AviController) SetupAKOCRDEventHandlers(numWorkers uint32) {
 				if c.DisableSync {
 					return
 				}
-				oauthSamlConfig, ok := obj.(*akov1alpha2.OAuthSamlConfig)
+				ssoRule, ok := obj.(*akov1alpha2.SSORule)
 				if !ok {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 					if !ok {
 						utils.AviLog.Errorf("couldn't get object from tombstone %#v", obj)
 						return
 					}
-					oauthSamlConfig, ok = tombstone.Obj.(*akov1alpha2.OAuthSamlConfig)
+					ssoRule, ok = tombstone.Obj.(*akov1alpha2.SSORule)
 					if !ok {
-						utils.AviLog.Errorf("Tombstone contained object that is not an OAuthSamlConfig: %#v", obj)
+						utils.AviLog.Errorf("Tombstone contained object that is not an SSORule: %#v", obj)
 						return
 					}
 				}
-				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(oauthSamlConfig))
-				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfig)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(ssoRule))
+				key := lib.SSORule + "/" + utils.ObjKey(ssoRule)
 				utils.AviLog.Debugf("key: %s, msg: DELETE", key)
 				objects.SharedResourceVerInstanceLister().Delete(key)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 			},
 		}
-		informer.OAuthSamlConfigInformer.Informer().AddEventHandler(oauthSamlConfigEventHandler)
+		informer.SSORuleInformer.Informer().AddEventHandler(ssoRuleEventHandler)
 	}
 	return
 }

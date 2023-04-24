@@ -21,7 +21,7 @@ import (
 )
 
 
-type OAuthSamlConfigSpec struct {
+type SSORuleSpec struct {
 	Fqdn          *string        `json:"fqdn"`
 	OauthVsConfig *OAuthVSConfig `json:"oauthVsConfig,omitempty"`
 	SamlSpConfig  *SAMLSPConfig  `json:"samlSpConfig,omitempty"`
@@ -29,7 +29,7 @@ type OAuthSamlConfigSpec struct {
 }
 
 
-type OAuthSamlConfigStatus struct {
+type SSORuleStatus struct {
 	Status string `json:"status,omitempty"`
 	Error  string `json:"error"`
 }
@@ -37,17 +37,17 @@ type OAuthSamlConfigStatus struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type OAuthSamlConfig struct {
+type SSORule struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   OAuthSamlConfigSpec   `json:"spec,omitempty"`
-	Status OAuthSamlConfigStatus `json:"status,omitempty"`
+	Spec   SSORuleSpec   `json:"spec,omitempty"`
+	Status SSORuleStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type OAuthSamlConfigList struct {
+type SSORuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OAuthSamlConfig `json:"items"`
+	Items           []SSORule `json:"items"`
 }

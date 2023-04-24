@@ -26,7 +26,7 @@ import (
 
 type AkoV1alpha2Interface interface {
 	RESTClient() rest.Interface
-	OAuthSamlConfigsGetter
+	SSORulesGetter
 }
 
 // AkoV1alpha2Client is used to interact with features provided by the ako.vmware.com group.
@@ -34,8 +34,8 @@ type AkoV1alpha2Client struct {
 	restClient rest.Interface
 }
 
-func (c *AkoV1alpha2Client) OAuthSamlConfigs(namespace string) OAuthSamlConfigInterface {
-	return newOAuthSamlConfigs(c, namespace)
+func (c *AkoV1alpha2Client) SSORules(namespace string) SSORuleInterface {
+	return newSSORules(c, namespace)
 }
 
 // NewForConfig creates a new AkoV1alpha2Client for the given config.

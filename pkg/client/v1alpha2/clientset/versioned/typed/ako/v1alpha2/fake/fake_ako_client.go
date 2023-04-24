@@ -28,8 +28,8 @@ type FakeAkoV1alpha2 struct {
 	*testing.Fake
 }
 
-func (c *FakeAkoV1alpha2) OAuthSamlConfigs(namespace string) v1alpha2.OAuthSamlConfigInterface {
-	return &FakeOAuthSamlConfigs{c, namespace}
+func (c *FakeAkoV1alpha2) SSORules(namespace string) v1alpha2.SSORuleInterface {
+	return &FakeSSORules{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

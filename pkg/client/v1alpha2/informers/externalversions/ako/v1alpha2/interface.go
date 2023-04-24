@@ -24,8 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// OAuthSamlConfigs returns a OAuthSamlConfigInformer.
-	OAuthSamlConfigs() OAuthSamlConfigInformer
+	// SSORules returns a SSORuleInformer.
+	SSORules() SSORuleInformer
 }
 
 type version struct {
@@ -39,7 +39,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// OAuthSamlConfigs returns a OAuthSamlConfigInformer.
-func (v *version) OAuthSamlConfigs() OAuthSamlConfigInformer {
-	return &oAuthSamlConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// SSORules returns a SSORuleInformer.
+func (v *version) SSORules() SSORuleInformer {
+	return &sSORuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

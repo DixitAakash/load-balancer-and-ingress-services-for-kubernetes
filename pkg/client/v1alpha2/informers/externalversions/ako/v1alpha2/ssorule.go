@@ -32,59 +32,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// OAuthSamlConfigInformer provides access to a shared informer and lister for
-// OAuthSamlConfigs.
-type OAuthSamlConfigInformer interface {
+// SSORuleInformer provides access to a shared informer and lister for
+// SSORules.
+type SSORuleInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha2.OAuthSamlConfigLister
+	Lister() v1alpha2.SSORuleLister
 }
 
-type oAuthSamlConfigInformer struct {
+type sSORuleInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewOAuthSamlConfigInformer constructs a new informer for OAuthSamlConfig type.
+// NewSSORuleInformer constructs a new informer for SSORule type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewOAuthSamlConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredOAuthSamlConfigInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewSSORuleInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredSSORuleInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredOAuthSamlConfigInformer constructs a new informer for OAuthSamlConfig type.
+// NewFilteredSSORuleInformer constructs a new informer for SSORule type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredOAuthSamlConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredSSORuleInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AkoV1alpha2().OAuthSamlConfigs(namespace).List(context.TODO(), options)
+				return client.AkoV1alpha2().SSORules(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AkoV1alpha2().OAuthSamlConfigs(namespace).Watch(context.TODO(), options)
+				return client.AkoV1alpha2().SSORules(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&akov1alpha2.OAuthSamlConfig{},
+		&akov1alpha2.SSORule{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *oAuthSamlConfigInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredOAuthSamlConfigInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *sSORuleInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredSSORuleInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *oAuthSamlConfigInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&akov1alpha2.OAuthSamlConfig{}, f.defaultInformer)
+func (f *sSORuleInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&akov1alpha2.SSORule{}, f.defaultInformer)
 }
 
-func (f *oAuthSamlConfigInformer) Lister() v1alpha2.OAuthSamlConfigLister {
-	return v1alpha2.NewOAuthSamlConfigLister(f.Informer().GetIndexer())
+func (f *sSORuleInformer) Lister() v1alpha2.SSORuleLister {
+	return v1alpha2.NewSSORuleLister(f.Informer().GetIndexer())
 }

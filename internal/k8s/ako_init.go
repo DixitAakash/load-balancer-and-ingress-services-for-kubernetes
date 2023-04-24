@@ -984,19 +984,19 @@ func (c *AviController) FullSyncK8s(sync bool) error {
 			}
 		}
 
-		oauthSamlConfigObjs, err := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(metav1.NamespaceAll).List(labels.Set(nil).AsSelector())
+		ssoRuleObjs, err := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(metav1.NamespaceAll).List(labels.Set(nil).AsSelector())
 		if err != nil {
-			utils.AviLog.Errorf("Unable to retrieve the oauthSamlConfigs during full sync: %s", err)
+			utils.AviLog.Errorf("Unable to retrieve the SsoRules during full sync: %s", err)
 		} else {
-			for _, oauthSamlConfigObj := range oauthSamlConfigObjs {
-				key := lib.OAuthSamlConfig + "/" + utils.ObjKey(oauthSamlConfigObj)
-				meta, err := meta.Accessor(oauthSamlConfigObj)
+			for _, ssoRuleObj := range ssoRuleObjs {
+				key := lib.SSORule + "/" + utils.ObjKey(ssoRuleObj)
+				meta, err := meta.Accessor(ssoRuleObj)
 				if err == nil {
 					resVer := meta.GetResourceVersion()
 					objects.SharedResourceVerInstanceLister().Save(key, resVer)
 				}
-				if err := c.GetValidator().ValidateOAuthSamlConfigObj(key, oauthSamlConfigObj); err != nil {
-					utils.AviLog.Warnf("key: %s, Error retrieved during validation of OAuthSamlConfig: %v", key, err)
+				if err := c.GetValidator().ValidateSSORuleObj(key, ssoRuleObj); err != nil {
+					utils.AviLog.Warnf("key: %s, Error retrieved during validation of SSORule : %v", key, err)
 				}
 				nodes.DequeueIngestion(key, true)
 			}
