@@ -28,6 +28,7 @@ import (
 	avinodes "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/nodes"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/objects"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/api"
+	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/apis/ako/v1alpha2"
 	crdfake "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha1/clientset/versioned/fake"
 	v1alpha2crdfake "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/client/v1alpha2/clientset/versioned/fake"
 	utils "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
@@ -208,11 +209,11 @@ func TearDownIngressForCacheSyncCheck(t *testing.T, modelName string) {
 	TearDownTestForIngress(t, modelName)
 }
 
-func TestCreateUpdateDeleteOAuthSamlConfigForEvh(t *testing.T) {
+func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	modelName, _ := GetDedicatedModel("foo.com", "default")
-	oscname := "sampleosc-foo"
+	srname := "samplesr-foo"
 	SetUpIngressForCacheSyncCheck(t, true, true, modelName)
 
 	err := integrationtest.SetUpOAuthSecret()
@@ -222,15 +223,15 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvh(t *testing.T) {
 		// Sleeping for 5s for secret to be updated in informer
 		time.Sleep(5 * time.Second)
 	}
-	integrationtest.SetupOAuthSamlConfig(t, oscname, "foo.com", true, true, true)
+	integrationtest.SetupSSORule(t, srname, "foo.com", "OAuth")
 
 	g.Eventually(func() string {
-		oauthSamlConfig, _ := v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Get(context.TODO(), oscname, metav1.GetOptions{})
-		return oauthSamlConfig.Status.Status
+		ssoRule, _ := v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Get(context.TODO(), srname, metav1.GetOptions{})
+		return ssoRule.Status.Status
 	}, 20*time.Second).Should(gomega.Equal("Accepted"))
 
 	sniVSKey := cache.NamespaceName{Namespace: "admin", Name: lib.Encode("cluster--foo.com"+lib.DedicatedSuffix, lib.EVHVS) + "-EVH"}
-	integrationtest.VerifyMetadataOAuthSamlConfig(t, g, sniVSKey, "default/sampleosc-foo", true)
+	integrationtest.VerifyMetadataSSORule(t, g, sniVSKey, "default/samplesr-foo", true)
 	g.Eventually(func() int {
 		_, aviModel := objects.SharedAviGraphLister().Get(modelName)
 		nodes, ok := aviModel.(*avinodes.AviObjectGraph)
@@ -266,22 +267,26 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvh(t *testing.T) {
 	g.Expect(nodes[0].SamlSpConfig).To(gomega.BeNil())
 
 	//Update with Oidc parameters as false
-	oscUpdate := integrationtest.FakeOAuthSamlConfig{
-		Name:              oscname,
-		Namespace:         "default",
-		Fqdn:              "foo.com",
-		OAuthEnabled:      true,
-		OpaqueTokenParams: true,
-		Oidc:              false,
-	}.OAuthSamlConfig()
-	oscUpdate.ResourceVersion = "2"
-	_, err = v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Update(context.TODO(), oscUpdate, metav1.UpdateOptions{})
+	srUpdate := integrationtest.FakeSSORule{
+		Name:      srname,
+		Namespace: "default",
+		Fqdn:      "foo.com",
+		SSOType:   "OAuth",
+	}.SSORule()
+	srUpdate.ResourceVersion = "2"
+	oidcEnable, profile, userinfo := false, false, false
+	srUpdate.Spec.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig = &v1alpha2.OIDCConfig{
+		OidcEnable: &oidcEnable,
+		Profile:    &profile,
+		Userinfo:   &userinfo,
+	}
+	_, err = v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Update(context.TODO(), srUpdate, metav1.UpdateOptions{})
 	if err != nil {
-		t.Fatalf("error in updating OAuthSamlConfig: %v", err)
+		t.Fatalf("error in updating SSORule: %v", err)
 	}
 	g.Eventually(func() string {
-		oauthSamlConfig, _ := v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Get(context.TODO(), oscname, metav1.GetOptions{})
-		return oauthSamlConfig.Status.Status
+		ssoRule, _ := v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Get(context.TODO(), srname, metav1.GetOptions{})
+		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
 	g.Eventually(func() int {
@@ -303,7 +308,7 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvh(t *testing.T) {
 	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(false))
 
 	// Delete/Disable
-	integrationtest.TeardownOAuthSamlConfig(t, g, sniVSKey, oscname)
+	integrationtest.TeardownSSORule(t, g, sniVSKey, srname)
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
 
@@ -318,12 +323,12 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvh(t *testing.T) {
 	TearDownIngressForCacheSyncCheck(t, modelName)
 }
 
-func TestCreateUpdateDeleteOAuthSamlConfigForEvhInsecure(t *testing.T) {
+func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	modelName, _ := GetDedicatedModel("foo.com", "default")
-	oscname := "sampleosc-foo"
-	// create insecure ingress, OAuthSamlConfig should be applied in case of EVH
+	srname := "samplesr-foo"
+	// create insecure ingress, SSORule should be applied in case of EVH
 	SetUpIngressForCacheSyncCheck(t, false, false, modelName)
 
 	err := integrationtest.SetUpOAuthSecret()
@@ -333,15 +338,15 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvhInsecure(t *testing.T) {
 		// Sleeping for 5s for secret to be updated in informer
 		time.Sleep(5 * time.Second)
 	}
-	integrationtest.SetupOAuthSamlConfig(t, oscname, "foo.com", false, false, false)
+	integrationtest.SetupSSORule(t, srname, "foo.com", "SAML")
 
 	g.Eventually(func() string {
-		oauthSamlConfig, _ := v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Get(context.TODO(), oscname, metav1.GetOptions{})
-		return oauthSamlConfig.Status.Status
+		ssoRule, _ := v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Get(context.TODO(), srname, metav1.GetOptions{})
+		return ssoRule.Status.Status
 	}, 20*time.Second).Should(gomega.Equal("Accepted"))
 
 	sniVSKey := cache.NamespaceName{Namespace: "admin", Name: lib.Encode("cluster--foo.com"+lib.DedicatedSuffix, lib.EVHVS) + "-EVH"}
-	integrationtest.VerifyMetadataOAuthSamlConfig(t, g, sniVSKey, "default/sampleosc-foo", true)
+	integrationtest.VerifyMetadataSSORule(t, g, sniVSKey, "default/samplesr-foo", true)
 	g.Eventually(func() int {
 		_, aviModel := objects.SharedAviGraphLister().Get(modelName)
 		nodes, ok := aviModel.(*avinodes.AviObjectGraph)
@@ -366,22 +371,20 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvhInsecure(t *testing.T) {
 	g.Expect(*nodes[0].SamlSpConfig.UseIdpSessionTimeout).To(gomega.Equal(false))
 
 	//Update with oauth parameters instead of saml
-	oscUpdate := integrationtest.FakeOAuthSamlConfig{
-		Name:              oscname,
-		Namespace:         "default",
-		Fqdn:              "foo.com",
-		OAuthEnabled:      true,
-		OpaqueTokenParams: true,
-		Oidc:              true,
-	}.OAuthSamlConfig()
-	oscUpdate.ResourceVersion = "2"
-	_, err = v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Update(context.TODO(), oscUpdate, metav1.UpdateOptions{})
+	srUpdate := integrationtest.FakeSSORule{
+		Name:      srname,
+		Namespace: "default",
+		Fqdn:      "foo.com",
+		SSOType:   "OAuth",
+	}.SSORule()
+	srUpdate.ResourceVersion = "2"
+	_, err = v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Update(context.TODO(), srUpdate, metav1.UpdateOptions{})
 	if err != nil {
-		t.Fatalf("error in updating OAuthSamlConfig: %v", err)
+		t.Fatalf("error in updating SSORule: %v", err)
 	}
 	g.Eventually(func() string {
-		oauthSamlConfig, _ := v1alpha2CRDClient.AkoV1alpha2().OAuthSamlConfigs("default").Get(context.TODO(), oscname, metav1.GetOptions{})
-		return oauthSamlConfig.Status.Status
+		ssoRule, _ := v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Get(context.TODO(), srname, metav1.GetOptions{})
+		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
 	g.Eventually(func() int {
@@ -421,7 +424,7 @@ func TestCreateUpdateDeleteOAuthSamlConfigForEvhInsecure(t *testing.T) {
 	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.JwtParams).To(gomega.BeNil())
 
 	// Delete/Disable
-	integrationtest.TeardownOAuthSamlConfig(t, g, sniVSKey, oscname)
+	integrationtest.TeardownSSORule(t, g, sniVSKey, srname)
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
 
