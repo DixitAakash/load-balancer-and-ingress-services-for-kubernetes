@@ -357,47 +357,47 @@ func BuildPoolHTTPRule(host, poolPath, ingName, namespace, infraSettingName, key
 
 }
 
-func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
-	// use host to find out OAuthSamlConfig CRD if it exists
+func BuildL7SSORule(host, key string, vsNode AviVsEvhSniModel) {
+	// use host to find out SSORule CRD if it exists
 	// The host that comes here will have a proper FQDN, either from the Ingress/Route (foo.com)
 
-	found, oscNamespaceName := objects.SharedCRDLister().GetFQDNToOAuthSamlConfigMapping(host)
+	found, srNamespaceName := objects.SharedCRDLister().GetFQDNToSSORuleMapping(host)
 	deleteCase := false
 	if !found {
-		utils.AviLog.Debugf("key: %s, msg: No OAuthSamlConfig found for virtualhost: %s in Cache", key, host)
+		utils.AviLog.Debugf("key: %s, msg: No SSORule found for virtualhost: %s in Cache", key, host)
 		deleteCase = true
 	}
 
 	var err error
-	var oscNSName []string
-	var oauthSamlConfig *akov1alpha2.OAuthSamlConfig
+	var srNSName []string
+	var ssoRule *akov1alpha2.SSORule
 	if !deleteCase {
-		oscNSName = strings.Split(oscNamespaceName, "/")
-		oauthSamlConfig, err = lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(oscNSName[0]).Get(oscNSName[1])
+		srNSName = strings.Split(srNamespaceName, "/")
+		ssoRule, err = lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(srNSName[0]).Get(srNSName[1])
 		if err != nil {
-			utils.AviLog.Debugf("key: %s, msg: No OAuthSamlConfig found for virtualhost: %s msg: %v", key, host, err)
+			utils.AviLog.Debugf("key: %s, msg: No SSORule found for virtualhost: %s msg: %v", key, host, err)
 			deleteCase = true
-		} else if oauthSamlConfig.Status.Status == lib.StatusRejected {
-			// do not apply a rejected OAuthSamlConfig, this way the VS would retain
+		} else if ssoRule.Status.Status == lib.StatusRejected {
+			// do not apply a rejected SSORule, this way the VS would retain
 			return
 		}
 	}
 	var crdStatus lib.CRDMetadata
 
 	if !deleteCase {
-		copier.CopyWithOption(vsNode, &oauthSamlConfig.Spec, copier.Option{DeepCopy: true})
+		copier.CopyWithOption(vsNode, &ssoRule.Spec, copier.Option{DeepCopy: true})
 		//setting the fqdn to nil so that fqdn for child vs is not populated
 		generatedFields := vsNode.GetGeneratedFields()
 		generatedFields.Fqdn = nil
 		generatedFields.ConvertToRef()
-		if oauthSamlConfig.Spec.OauthVsConfig != nil {
-			if len(oauthSamlConfig.Spec.OauthVsConfig.OauthSettings) != 0 {
-				for i, oauthSetting := range oauthSamlConfig.Spec.OauthVsConfig.OauthSettings {
+		if ssoRule.Spec.OauthVsConfig != nil {
+			if len(ssoRule.Spec.OauthVsConfig.OauthSettings) != 0 {
+				for i, oauthSetting := range ssoRule.Spec.OauthVsConfig.OauthSettings {
 					if oauthSetting.AppSettings != nil {
 						// getting clientSecret from k8s secret
-						clientSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.AppSettings.ClientSecret)
+						clientSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(ssoRule.Namespace).Get(*oauthSetting.AppSettings.ClientSecret)
 						if err != nil || clientSecretObj == nil {
-							utils.AviLog.Errorf("key: %s, msg: Client secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.AppSettings.ClientSecret, err)
+							utils.AviLog.Errorf("key: %s, msg: Client secret not found for ssoRule obj: %s msg: %v", key, *oauthSetting.AppSettings.ClientSecret, err)
 							return
 						}
 						clientSecretString := string(clientSecretObj.Data["clientSecret"])
@@ -406,9 +406,9 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 					if oauthSetting.ResourceServer != nil {
 						if oauthSetting.ResourceServer.OpaqueTokenParams != nil {
 							// getting serverSecret from k8s secret
-							serverSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(oauthSamlConfig.Namespace).Get(*oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret)
+							serverSecretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(ssoRule.Namespace).Get(*oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret)
 							if err != nil || serverSecretObj == nil {
-								utils.AviLog.Errorf("key: %s, msg: Server secret not found for oauthSamlConfig obj: %s msg: %v", key, *oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret, err)
+								utils.AviLog.Errorf("key: %s, msg: Server secret not found for ssoRule obj: %s msg: %v", key, *oauthSetting.ResourceServer.OpaqueTokenParams.ServerSecret, err)
 								return
 							}
 							serverSecretString := string(serverSecretObj.Data["serverSecret"])
@@ -422,18 +422,18 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 			}
 		}
 
-		if oauthSamlConfig.Spec.SamlSpConfig != nil {
-			if *oauthSamlConfig.Spec.SamlSpConfig.AuthnReqAcsType != "SAML_AUTHN_REQ_ACS_TYPE_INDEX" {
+		if ssoRule.Spec.SamlSpConfig != nil {
+			if *ssoRule.Spec.SamlSpConfig.AuthnReqAcsType != "SAML_AUTHN_REQ_ACS_TYPE_INDEX" {
 				generatedFields.SamlSpConfig.AcsIndex = nil
 			}
 		}
 		crdStatus = lib.CRDMetadata{
-			Type:   "OAuthSamlConfig",
-			Value:  oauthSamlConfig.Namespace + "/" + oauthSamlConfig.Name,
+			Type:   "SSORule",
+			Value:  ssoRule.Namespace + "/" + ssoRule.Name,
 			Status: lib.CRDActive,
 		}
 
-		utils.AviLog.Infof("key: %s, Successfully attached OAuthSamlConfig %s on vsNode %s", key, oscNamespaceName, vsNode.GetName())
+		utils.AviLog.Infof("key: %s, Successfully attached SSORule %s on vsNode %s", key, srNamespaceName, vsNode.GetName())
 	} else {
 		generatedFields := vsNode.GetGeneratedFields()
 		generatedFields.OauthVsConfig = nil
@@ -444,8 +444,8 @@ func BuildL7OAuthSamlConfig(host, key string, vsNode AviVsEvhSniModel) {
 			crdStatus = vsNode.GetServiceMetadata().CRDStatus
 			crdStatus.Status = lib.CRDInactive
 		}
-		if oscNamespaceName != "" {
-			utils.AviLog.Infof("key: %s, Successfully detached OAuthSamlConfig %s from vsNode %s", key, oscNamespaceName, vsNode.GetName())
+		if srNamespaceName != "" {
+			utils.AviLog.Infof("key: %s, Successfully detached SSORule %s from vsNode %s", key, srNamespaceName, vsNode.GetName())
 		}
 	}
 

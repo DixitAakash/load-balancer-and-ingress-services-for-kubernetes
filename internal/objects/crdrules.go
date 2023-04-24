@@ -28,17 +28,17 @@ var crdonce sync.Once
 func SharedCRDLister() *CRDLister {
 	crdonce.Do(func() {
 		CRDinstance = &CRDLister{
-			FqdnHostRuleCache:        NewObjectMapStore(),
-			HostRuleFQDNCache:        NewObjectMapStore(),
-			FqdnHTTPRulesCache:       NewObjectMapStore(),
-			HTTPRuleFqdnCache:        NewObjectMapStore(),
-			FqdnToGSFQDNCache:        NewObjectMapStore(),
-			FqdnSharedVSModelCache:   NewObjectMapStore(),
-			SharedVSModelFqdnCache:   NewObjectMapStore(),
-			FqdnFqdnTypeCache:        NewObjectMapStore(),
-			FQDNToAliasesCache:       NewObjectMapStore(),
-			FqdnOAuthSamlConfigCache: NewObjectMapStore(),
-			OAuthSamlConfigFQDNCache: NewObjectMapStore(),
+			FqdnHostRuleCache:      NewObjectMapStore(),
+			HostRuleFQDNCache:      NewObjectMapStore(),
+			FqdnHTTPRulesCache:     NewObjectMapStore(),
+			HTTPRuleFqdnCache:      NewObjectMapStore(),
+			FqdnToGSFQDNCache:      NewObjectMapStore(),
+			FqdnSharedVSModelCache: NewObjectMapStore(),
+			SharedVSModelFqdnCache: NewObjectMapStore(),
+			FqdnFqdnTypeCache:      NewObjectMapStore(),
+			FQDNToAliasesCache:     NewObjectMapStore(),
+			FqdnSSORuleCache:       NewObjectMapStore(),
+			SSORuleFQDNCache:       NewObjectMapStore(),
 		}
 	})
 	return CRDinstance
@@ -80,10 +80,10 @@ type CRDLister struct {
 
 	// TODO: can be removed once we move to indexers
 	// fqdn.com: hr1
-	FqdnOAuthSamlConfigCache *ObjectMapStore
+	FqdnSSORuleCache *ObjectMapStore
 
 	// hr1: fqdn.com - required for httprule
-	OAuthSamlConfigFQDNCache *ObjectMapStore
+	SSORuleFQDNCache *ObjectMapStore
 }
 
 // FqdnHostRuleCache
@@ -326,38 +326,38 @@ func (c *CRDLister) DeleteFQDNToAliasesMapping(fqdn string) bool {
 	return c.FQDNToAliasesCache.Delete(fqdn)
 }
 
-// FqdnOAuthSamlConfigCache
-func (c *CRDLister) GetFQDNToOAuthSamlConfigMapping(fqdn string) (bool, string) {
-	found, oauthSamlConfig := c.FqdnOAuthSamlConfigCache.Get(fqdn)
+// FqdnSSORuleCache
+func (c *CRDLister) GetFQDNToSSORuleMapping(fqdn string) (bool, string) {
+	found, ssoRule := c.FqdnSSORuleCache.Get(fqdn)
 	if !found {
 		return false, ""
 	}
-	return true, oauthSamlConfig.(string)
+	return true, ssoRule.(string)
 }
 
-func (c *CRDLister) GetOAuthSamlConfigToFQDNMapping(oauthSamlConfig string) (bool, string) {
-	found, fqdn := c.OAuthSamlConfigFQDNCache.Get(oauthSamlConfig)
+func (c *CRDLister) GetSSORuleToFQDNMapping(ssoRule string) (bool, string) {
+	found, fqdn := c.SSORuleFQDNCache.Get(ssoRule)
 	if !found {
 		return false, ""
 	}
 	return true, fqdn.(string)
 }
 
-func (c *CRDLister) DeleteOAuthSamlConfigFQDNMapping(oauthSamlConfig string) bool {
+func (c *CRDLister) DeleteSSORuleFQDNMapping(ssoRule string) bool {
 	c.NSLock.Lock()
 	defer c.NSLock.Unlock()
-	found, fqdn := c.OAuthSamlConfigFQDNCache.Get(oauthSamlConfig)
+	found, fqdn := c.SSORuleFQDNCache.Get(ssoRule)
 	if found {
-		success1 := c.OAuthSamlConfigFQDNCache.Delete(oauthSamlConfig)
-		success2 := c.FqdnOAuthSamlConfigCache.Delete(fqdn.(string))
+		success1 := c.SSORuleFQDNCache.Delete(ssoRule)
+		success2 := c.FqdnSSORuleCache.Delete(fqdn.(string))
 		return success1 && success2
 	}
 	return true
 }
 
-func (c *CRDLister) UpdateFQDNOAuthSamlConfigMapping(fqdn string, oauthSamlConfig string) {
+func (c *CRDLister) UpdateFQDNSSORuleMapping(fqdn string, ssoRule string) {
 	c.NSLock.Lock()
 	defer c.NSLock.Unlock()
-	c.FqdnOAuthSamlConfigCache.AddOrUpdate(fqdn, oauthSamlConfig)
-	c.OAuthSamlConfigFQDNCache.AddOrUpdate(oauthSamlConfig, fqdn)
+	c.FqdnSSORuleCache.AddOrUpdate(fqdn, ssoRule)
+	c.SSORuleFQDNCache.AddOrUpdate(ssoRule, fqdn)
 }

@@ -116,10 +116,10 @@ var (
 		Type:                           lib.ServiceImport,
 		GetParentMultiClusterIngresses: ServiceImportToMultiClusterIng,
 	}
-	OAuthSamlConfig = GraphSchema{
-		Type:               lib.OAuthSamlConfig,
-		GetParentIngresses: OAuthSamlConfigToIng,
-		GetParentRoutes:    OAuthSamlConfigToIng,
+	SSORule = GraphSchema{
+		Type:               lib.SSORule,
+		GetParentIngresses: SSORuleToIng,
+		GetParentRoutes:    SSORuleToIng,
 	}
 	SupportedGraphTypes = GraphDescriptor{
 		Ingress,
@@ -138,7 +138,7 @@ var (
 		AviInfraSetting,
 		MultiClusterIngress,
 		ServiceImport,
-		OAuthSamlConfig,
+		SSORule,
 	}
 )
 
@@ -642,34 +642,34 @@ func HostRuleToIng(hrname string, namespace string, key string) ([]string, bool)
 	return allIngresses, true
 }
 
-func OAuthSamlConfigToIng(oscname string, namespace string, key string) ([]string, bool) {
+func SSORuleToIng(srname string, namespace string, key string) ([]string, bool) {
 	var err error
 	var oldFqdn, fqdn string
 	var fqdnType, oldFqdnType = string(akov1alpha1.Exact), string(akov1alpha1.Exact)
 	var oldFound bool
 
 	allIngresses := make([]string, 0)
-	oauthSamlConfig, err := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(namespace).Get(oscname)
+	ssoRule, err := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(namespace).Get(srname)
 	if k8serrors.IsNotFound(err) {
-		utils.AviLog.Debugf("key: %s, msg: OAuthSamlConfig Deleted", key)
-		oldFound, oldFqdn = objects.SharedCRDLister().GetOAuthSamlConfigToFQDNMapping(namespace + "/" + oscname)
+		utils.AviLog.Debugf("key: %s, msg: SSORule Deleted", key)
+		oldFound, oldFqdn = objects.SharedCRDLister().GetSSORuleToFQDNMapping(namespace + "/" + srname)
 		if !strings.Contains(oldFqdn, lib.ShardVSSubstring) {
-			objects.SharedCRDLister().DeleteOAuthSamlConfigFQDNMapping(namespace + "/" + oscname)
+			objects.SharedCRDLister().DeleteSSORuleFQDNMapping(namespace + "/" + srname)
 		}
 	} else if err != nil {
-		utils.AviLog.Errorf("key: %s, msg: Error getting OAuthSamlConfig: %v", key, err)
+		utils.AviLog.Errorf("key: %s, msg: Error getting SSORule: %v", key, err)
 		return nil, false
 	} else {
-		if oauthSamlConfig.Status.Status != lib.StatusAccepted {
+		if ssoRule.Status.Status != lib.StatusAccepted {
 			return []string{}, false
 		}
-		fqdn = *oauthSamlConfig.Spec.Fqdn
-		oldFound, oldFqdn = objects.SharedCRDLister().GetOAuthSamlConfigToFQDNMapping(namespace + "/" + oscname)
+		fqdn = *ssoRule.Spec.Fqdn
+		oldFound, oldFqdn = objects.SharedCRDLister().GetSSORuleToFQDNMapping(namespace + "/" + srname)
 		if oldFound && !strings.Contains(oldFqdn, lib.ShardVSSubstring) {
-			objects.SharedCRDLister().DeleteOAuthSamlConfigFQDNMapping(namespace + "/" + oscname)
+			objects.SharedCRDLister().DeleteSSORuleFQDNMapping(namespace + "/" + srname)
 		}
 		if !strings.Contains(fqdn, lib.ShardVSSubstring) {
-			objects.SharedCRDLister().UpdateFQDNOAuthSamlConfigMapping(fqdn, namespace+"/"+oscname)
+			objects.SharedCRDLister().UpdateFQDNSSORuleMapping(fqdn, namespace+"/"+srname)
 		}
 	}
 
