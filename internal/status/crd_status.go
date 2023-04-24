@@ -207,72 +207,72 @@ func UpdateAviInfraSettingStatus(key string, infraSetting *akov1alpha1.AviInfraS
 	utils.AviLog.Infof("key: %s, msg: Successfully updated the aviinfrasetting %s status %+v", key, infraSetting.Name, utils.Stringify(updateStatus))
 }
 
-// UpdateOAuthSamlConfigStatus OAuthSamlConfig status updates
-func UpdateOAuthSamlConfigStatus(key string, osc *akov1alpha2.OAuthSamlConfig, updateStatus UpdateCRDStatusOptions, retryNum ...int) {
+// UpdateSSORuleStatus SSORule status updates
+func UpdateSSORuleStatus(key string, sr *akov1alpha2.SSORule, updateStatus UpdateCRDStatusOptions, retryNum ...int) {
 	retry := 0
 	if len(retryNum) > 0 {
 		retry = retryNum[0]
 		if retry >= 3 {
-			utils.AviLog.Errorf("key: %s, msg: UpdateOAuthSamlConfigStatus retried 3 times, aborting", key)
+			utils.AviLog.Errorf("key: %s, msg: UpdateSSORuleStatus retried 3 times, aborting", key)
 			return
 		}
 	}
 
 	patchPayload, _ := json.Marshal(map[string]interface{}{
-		"status": akov1alpha2.OAuthSamlConfigStatus(updateStatus),
+		"status": akov1alpha2.SSORuleStatus(updateStatus),
 	})
 
-	_, err := lib.AKOControlConfig().V1alpha2CRDClientset().AkoV1alpha2().OAuthSamlConfigs(osc.Namespace).Patch(context.TODO(), osc.Name, types.MergePatchType, patchPayload, metav1.PatchOptions{}, "status")
+	_, err := lib.AKOControlConfig().V1alpha2CRDClientset().AkoV1alpha2().SSORules(sr.Namespace).Patch(context.TODO(), sr.Name, types.MergePatchType, patchPayload, metav1.PatchOptions{}, "status")
 	if err != nil {
-		utils.AviLog.Errorf("key: %s, msg: there was an error in updating the OAuthSamlConfig status: %+v", key, err)
-		updatedOsc, err := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(osc.Namespace).Get(osc.Name)
+		utils.AviLog.Errorf("key: %s, msg: there was an error in updating the SSORule status: %+v", key, err)
+		updatedSr, err := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(sr.Namespace).Get(sr.Name)
 		if err != nil {
-			utils.AviLog.Warnf("key: %s, msg: OAuthSamlConfig not found %v", key, err)
+			utils.AviLog.Warnf("key: %s, msg: SSORule not found %v", key, err)
 			if strings.Contains(err.Error(), utils.K8S_ETIMEDOUT) {
-				UpdateOAuthSamlConfigStatus(key, updatedOsc, updateStatus, retry+1)
+				UpdateSSORuleStatus(key, updatedSr, updateStatus, retry+1)
 			}
 			return
 		}
-		UpdateOAuthSamlConfigStatus(key, updatedOsc, updateStatus, retry+1)
+		UpdateSSORuleStatus(key, updatedSr, updateStatus, retry+1)
 	}
 
-	utils.AviLog.Infof("key: %s, msg: Successfully updated the OAuthSamlConfig %s/%s status %+v", key, osc.Namespace, osc.Name, utils.Stringify(updateStatus))
+	utils.AviLog.Infof("key: %s, msg: Successfully updated the SSORule %s/%s status %+v", key, sr.Namespace, sr.Name, utils.Stringify(updateStatus))
 }
 
-// OAuthSamlConfigEventBroadcast is responsible for broadcasting OAuthSamlConfig specific events when the VS Cache is Added/Updated/Deleted.
-func OAuthSamlConfigEventBroadcast(vsName string, vsCacheMetadataOld, vsMetadataNew lib.CRDMetadata) {
+// SSORuleEventBroadcast is responsible for broadcasting SSORule specific events when the VS Cache is Added/Updated/Deleted.
+func SSORuleEventBroadcast(vsName string, vsCacheMetadataOld, vsMetadataNew lib.CRDMetadata) {
 	if vsCacheMetadataOld.Value != vsMetadataNew.Value {
-		oldOSCNamespaceName := strings.Split(vsCacheMetadataOld.Value, "/")
-		newOSCNamespaceName := strings.Split(vsMetadataNew.Value, "/")
+		oldSRNamespaceName := strings.Split(vsCacheMetadataOld.Value, "/")
+		newSRNamespaceName := strings.Split(vsMetadataNew.Value, "/")
 
-		if len(oldOSCNamespaceName) != 2 || len(newOSCNamespaceName) != 2 {
+		if len(oldSRNamespaceName) != 2 || len(newSRNamespaceName) != 2 {
 			return
 		}
 
-		oldOAuthSamlConfig, _ := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(oldOSCNamespaceName[0]).Get(oldOSCNamespaceName[1])
-		newOAuthSamlConfig, _ := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(newOSCNamespaceName[0]).Get(newOSCNamespaceName[1])
-		if oldOAuthSamlConfig == nil || newOAuthSamlConfig == nil {
+		oldSSORule, _ := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(oldSRNamespaceName[0]).Get(oldSRNamespaceName[1])
+		newSSORule, _ := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(newSRNamespaceName[0]).Get(newSRNamespaceName[1])
+		if oldSSORule == nil || newSSORule == nil {
 			return
 		}
 
-		lib.AKOControlConfig().EventRecorder().Eventf(oldOAuthSamlConfig, corev1.EventTypeNormal, lib.Attached, "Configuration removed from VirtualService %s", vsName)
-		lib.AKOControlConfig().EventRecorder().Eventf(newOAuthSamlConfig, corev1.EventTypeNormal, lib.Attached, "Configuration applied to VirtualService %s", vsName)
+		lib.AKOControlConfig().EventRecorder().Eventf(oldSSORule, corev1.EventTypeNormal, lib.Attached, "Configuration removed from VirtualService %s", vsName)
+		lib.AKOControlConfig().EventRecorder().Eventf(newSSORule, corev1.EventTypeNormal, lib.Attached, "Configuration applied to VirtualService %s", vsName)
 	}
 
-	oscNamespaceName := strings.Split(vsMetadataNew.Value, "/")
-	if len(oscNamespaceName) != 2 {
+	srNamespaceName := strings.Split(vsMetadataNew.Value, "/")
+	if len(srNamespaceName) != 2 {
 		return
 	}
-	oauthSamlConfig, _ := lib.AKOControlConfig().CRDInformers().OAuthSamlConfigInformer.Lister().OAuthSamlConfigs(oscNamespaceName[0]).Get(oscNamespaceName[1])
-	if oauthSamlConfig == nil {
+	ssoRule, _ := lib.AKOControlConfig().CRDInformers().SSORuleInformer.Lister().SSORules(srNamespaceName[0]).Get(srNamespaceName[1])
+	if ssoRule == nil {
 		return
 	}
 
 	if (vsCacheMetadataOld.Status == lib.CRDInactive || vsCacheMetadataOld.Status == "") && vsMetadataNew.Status == lib.CRDActive {
 		// CRD was added, INACTIVE -> ACTIVE transitions
-		lib.AKOControlConfig().EventRecorder().Eventf(oauthSamlConfig, corev1.EventTypeNormal, lib.Attached, "Configuration applied to VirtualService %s", vsName)
+		lib.AKOControlConfig().EventRecorder().Eventf(ssoRule, corev1.EventTypeNormal, lib.Attached, "Configuration applied to VirtualService %s", vsName)
 	} else if vsCacheMetadataOld.Status == lib.CRDActive && (vsMetadataNew.Status == "" || vsMetadataNew.Status == lib.CRDInactive) {
 		// CRD was removed, ACTIVE -> INACTIVE transitions
-		lib.AKOControlConfig().EventRecorder().Eventf(oauthSamlConfig, corev1.EventTypeNormal, lib.Attached, "Configuration removed from VirtualService %s", vsName)
+		lib.AKOControlConfig().EventRecorder().Eventf(ssoRule, corev1.EventTypeNormal, lib.Attached, "Configuration removed from VirtualService %s", vsName)
 	}
 }
