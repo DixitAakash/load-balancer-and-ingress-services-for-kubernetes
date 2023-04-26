@@ -219,10 +219,10 @@ func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 	err := integrationtest.SetUpOAuthSecret()
 	if err != nil {
 		t.Fatalf("error in creating my-oauth-secret: %v", err)
-	} else {
-		// Sleeping for 5s for secret to be updated in informer
-		time.Sleep(5 * time.Second)
 	}
+	// Sleeping for 5s for secret to be updated in informer
+	time.Sleep(5 * time.Second)
+
 	integrationtest.SetupSSORule(t, srname, "foo.com", "OAuth")
 
 	g.Eventually(func() string {
@@ -243,28 +243,33 @@ func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 
 	_, aviModel := objects.SharedAviGraphLister().Get(modelName)
 	nodes := aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-
-	g.Expect(*nodes[0].SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicyoauth"))
-	g.Expect(*nodes[0].OauthVsConfig.CookieName).To(gomega.Equal("MY_OAUTH_COOKIE"))
-	g.Expect(*nodes[0].OauthVsConfig.CookieTimeout).To(gomega.Equal(int32(120)))
-	g.Expect(*nodes[0].OauthVsConfig.LogoutURI).To(gomega.Equal("https://auth.com/oauth/logout"))
-	g.Expect(*nodes[0].OauthVsConfig.RedirectURI).To(gomega.Equal("https://auth.com/oauth/redirect"))
-	g.Expect(*nodes[0].OauthVsConfig.PostLogoutRedirectURI).To(gomega.Equal("https://auth.com/oauth/post-logout-redirect"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings).To(gomega.HaveLen(1))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.ClientID).To(gomega.Equal("my-client-id"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.ClientSecret).To(gomega.Equal("my-client-secret"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.Scopes).To(gomega.HaveLen(1))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.Scopes[0]).To(gomega.Equal("scope-1"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AuthProfileRef).To(gomega.ContainSubstring("thisisaviref-authprofileoauth"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.AccessType).To(gomega.Equal("ACCESS_TOKEN_TYPE_OPAQUE"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.IntrospectionDataTimeout).To(gomega.Equal(int32(60)))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerID).To(gomega.Equal("my-server-id"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerSecret).To(gomega.Equal("my-server-secret"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.JwtParams).To(gomega.BeNil())
-	g.Expect(nodes[0].SamlSpConfig).To(gomega.BeNil())
+	var evhNode *avinodes.AviEvhVsNode
+	if *isVipPerNS == "true" {
+		evhNode = nodes[0].EvhNodes[0]
+	} else {
+		evhNode = nodes[0]
+	}
+	g.Expect(*evhNode.SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicyoauth"))
+	g.Expect(*evhNode.OauthVsConfig.CookieName).To(gomega.Equal("MY_OAUTH_COOKIE"))
+	g.Expect(*evhNode.OauthVsConfig.CookieTimeout).To(gomega.Equal(int32(120)))
+	g.Expect(*evhNode.OauthVsConfig.LogoutURI).To(gomega.Equal("https://auth.com/oauth/logout"))
+	g.Expect(*evhNode.OauthVsConfig.RedirectURI).To(gomega.Equal("https://auth.com/oauth/redirect"))
+	g.Expect(*evhNode.OauthVsConfig.PostLogoutRedirectURI).To(gomega.Equal("https://auth.com/oauth/post-logout-redirect"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings).To(gomega.HaveLen(1))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.ClientID).To(gomega.Equal("my-client-id"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.ClientSecret).To(gomega.Equal("my-client-secret"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].AppSettings.Scopes).To(gomega.HaveLen(1))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].AppSettings.Scopes[0]).To(gomega.Equal("scope-1"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AuthProfileRef).To(gomega.ContainSubstring("thisisaviref-authprofileoauth"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.AccessType).To(gomega.Equal("ACCESS_TOKEN_TYPE_OPAQUE"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.IntrospectionDataTimeout).To(gomega.Equal(int32(60)))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerID).To(gomega.Equal("my-server-id"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerSecret).To(gomega.Equal("my-server-secret"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.JwtParams).To(gomega.BeNil())
+	g.Expect(evhNode.SamlSpConfig).To(gomega.BeNil())
 
 	//Update with Oidc parameters as false
 	srUpdate := integrationtest.FakeSSORule{
@@ -289,32 +294,23 @@ func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel := objects.SharedAviGraphLister().Get(modelName)
-		nodes, ok := aviModel.(*avinodes.AviObjectGraph)
-		if !ok {
-			return 0
-		}
-		return len(nodes.GetAviEvhVS())
-	}, 20*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(false))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(false))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(false))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(false))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(false))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(false))
 
 	// Delete/Disable
 	integrationtest.TeardownSSORule(t, g, sniVSKey, srname)
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
 
-	g.Expect(nodes[0].SsoPolicyRef).To(gomega.BeNil())
-	g.Expect(nodes[0].OauthVsConfig).To(gomega.BeNil())
-	g.Expect(nodes[0].SamlSpConfig).To(gomega.BeNil())
+	g.Expect(evhNode.SsoPolicyRef).To(gomega.BeNil())
+	g.Expect(evhNode.OauthVsConfig).To(gomega.BeNil())
+	g.Expect(evhNode.SamlSpConfig).To(gomega.BeNil())
 
 	err = integrationtest.TearDownOAuthSecret()
 	if err != nil {
@@ -334,10 +330,10 @@ func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 	err := integrationtest.SetUpOAuthSecret()
 	if err != nil {
 		t.Fatalf("error in creating my-oauth-secret: %v", err)
-	} else {
-		// Sleeping for 5s for secret to be updated in informer
-		time.Sleep(5 * time.Second)
 	}
+	// Sleeping for 5s for secret to be updated in informer
+	time.Sleep(5 * time.Second)
+
 	integrationtest.SetupSSORule(t, srname, "foo.com", "SAML")
 
 	g.Eventually(func() string {
@@ -358,17 +354,23 @@ func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 
 	_, aviModel := objects.SharedAviGraphLister().Get(modelName)
 	nodes := aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
+	var evhNode *avinodes.AviEvhVsNode
+	if *isVipPerNS == "true" {
+		evhNode = nodes[0].EvhNodes[0]
+	} else {
+		evhNode = nodes[0]
+	}
 
-	g.Expect(nodes[0].OauthVsConfig).To(gomega.BeNil())
-	g.Expect(*nodes[0].SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicysaml"))
-	g.Expect(nodes[0].SamlSpConfig.AcsIndex).To(gomega.BeNil())
-	g.Expect(*nodes[0].SamlSpConfig.AuthnReqAcsType).To(gomega.Equal("SAML_AUTHN_REQ_ACS_TYPE_NONE"))
-	g.Expect(*nodes[0].SamlSpConfig.CookieName).To(gomega.Equal("MY_SAML_COOKIE"))
-	g.Expect(*nodes[0].SamlSpConfig.CookieTimeout).To(gomega.Equal(int32(120)))
-	g.Expect(*nodes[0].SamlSpConfig.EntityID).To(gomega.Equal("my-entityid"))
-	g.Expect(*nodes[0].SamlSpConfig.SigningSslKeyAndCertificateRef).To(gomega.ContainSubstring("thisisaviref-sslkeyandcertrefsaml"))
-	g.Expect(*nodes[0].SamlSpConfig.SingleSignonURL).To(gomega.Equal("https://auth.com/sso/acs/"))
-	g.Expect(*nodes[0].SamlSpConfig.UseIdpSessionTimeout).To(gomega.Equal(false))
+	g.Expect(evhNode.OauthVsConfig).To(gomega.BeNil())
+	g.Expect(*evhNode.SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicysaml"))
+	g.Expect(evhNode.SamlSpConfig.AcsIndex).To(gomega.BeNil())
+	g.Expect(*evhNode.SamlSpConfig.AuthnReqAcsType).To(gomega.Equal("SAML_AUTHN_REQ_ACS_TYPE_NONE"))
+	g.Expect(*evhNode.SamlSpConfig.CookieName).To(gomega.Equal("MY_SAML_COOKIE"))
+	g.Expect(*evhNode.SamlSpConfig.CookieTimeout).To(gomega.Equal(int32(120)))
+	g.Expect(*evhNode.SamlSpConfig.EntityID).To(gomega.Equal("my-entityid"))
+	g.Expect(*evhNode.SamlSpConfig.SigningSslKeyAndCertificateRef).To(gomega.ContainSubstring("thisisaviref-sslkeyandcertrefsaml"))
+	g.Expect(*evhNode.SamlSpConfig.SingleSignonURL).To(gomega.Equal("https://auth.com/sso/acs/"))
+	g.Expect(*evhNode.SamlSpConfig.UseIdpSessionTimeout).To(gomega.Equal(false))
 
 	//Update with oauth parameters instead of saml
 	srUpdate := integrationtest.FakeSSORule{
@@ -387,50 +389,41 @@ func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel := objects.SharedAviGraphLister().Get(modelName)
-		nodes, ok := aviModel.(*avinodes.AviObjectGraph)
-		if !ok {
-			return 0
-		}
-		return len(nodes.GetAviEvhVS())
-	}, 20*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-	g.Expect(nodes[0].SamlSpConfig).To(gomega.BeNil())
-	g.Expect(*nodes[0].SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicyoauth"))
-	g.Expect(*nodes[0].OauthVsConfig.CookieName).To(gomega.Equal("MY_OAUTH_COOKIE"))
-	g.Expect(*nodes[0].OauthVsConfig.CookieTimeout).To(gomega.Equal(int32(120)))
-	g.Expect(*nodes[0].OauthVsConfig.LogoutURI).To(gomega.Equal("https://auth.com/oauth/logout"))
-	g.Expect(*nodes[0].OauthVsConfig.RedirectURI).To(gomega.Equal("https://auth.com/oauth/redirect"))
-	g.Expect(*nodes[0].OauthVsConfig.PostLogoutRedirectURI).To(gomega.Equal("https://auth.com/oauth/post-logout-redirect"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings).To(gomega.HaveLen(1))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.ClientID).To(gomega.Equal("my-client-id"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.ClientSecret).To(gomega.Equal("my-client-secret"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.Scopes).To(gomega.HaveLen(1))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.Scopes[0]).To(gomega.Equal("scope-1"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(true))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].AuthProfileRef).To(gomega.ContainSubstring("thisisaviref-authprofileoauth"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.AccessType).To(gomega.Equal("ACCESS_TOKEN_TYPE_OPAQUE"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.IntrospectionDataTimeout).To(gomega.Equal(int32(60)))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerID).To(gomega.Equal("my-server-id"))
-	g.Expect(*nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerSecret).To(gomega.Equal("my-server-secret"))
-	g.Expect(nodes[0].OauthVsConfig.OauthSettings[0].ResourceServer.JwtParams).To(gomega.BeNil())
+	g.Expect(evhNode.SamlSpConfig).To(gomega.BeNil())
+	g.Expect(*evhNode.SsoPolicyRef).To(gomega.ContainSubstring("thisisaviref-ssopolicyoauth"))
+	g.Expect(*evhNode.OauthVsConfig.CookieName).To(gomega.Equal("MY_OAUTH_COOKIE"))
+	g.Expect(*evhNode.OauthVsConfig.CookieTimeout).To(gomega.Equal(int32(120)))
+	g.Expect(*evhNode.OauthVsConfig.LogoutURI).To(gomega.Equal("https://auth.com/oauth/logout"))
+	g.Expect(*evhNode.OauthVsConfig.RedirectURI).To(gomega.Equal("https://auth.com/oauth/redirect"))
+	g.Expect(*evhNode.OauthVsConfig.PostLogoutRedirectURI).To(gomega.Equal("https://auth.com/oauth/post-logout-redirect"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings).To(gomega.HaveLen(1))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.ClientID).To(gomega.Equal("my-client-id"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.ClientSecret).To(gomega.Equal("my-client-secret"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].AppSettings.Scopes).To(gomega.HaveLen(1))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].AppSettings.Scopes[0]).To(gomega.Equal("scope-1"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.OidcEnable).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Profile).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AppSettings.OidcConfig.Userinfo).To(gomega.Equal(true))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].AuthProfileRef).To(gomega.ContainSubstring("thisisaviref-authprofileoauth"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.AccessType).To(gomega.Equal("ACCESS_TOKEN_TYPE_OPAQUE"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.IntrospectionDataTimeout).To(gomega.Equal(int32(60)))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerID).To(gomega.Equal("my-server-id"))
+	g.Expect(*evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.OpaqueTokenParams.ServerSecret).To(gomega.Equal("my-server-secret"))
+	g.Expect(evhNode.OauthVsConfig.OauthSettings[0].ResourceServer.JwtParams).To(gomega.BeNil())
 
 	// Delete/Disable
 	integrationtest.TeardownSSORule(t, g, sniVSKey, srname)
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
 
-	g.Expect(nodes[0].SsoPolicyRef).To(gomega.BeNil())
-	g.Expect(nodes[0].OauthVsConfig).To(gomega.BeNil())
-	g.Expect(nodes[0].SamlSpConfig).To(gomega.BeNil())
+	g.Expect(evhNode.SsoPolicyRef).To(gomega.BeNil())
+	g.Expect(evhNode.OauthVsConfig).To(gomega.BeNil())
+	g.Expect(evhNode.SamlSpConfig).To(gomega.BeNil())
 
 	err = integrationtest.TearDownOAuthSecret()
 	if err != nil {

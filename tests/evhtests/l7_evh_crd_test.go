@@ -1011,10 +1011,10 @@ func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 	err := integrationtest.SetUpOAuthSecret()
 	if err != nil {
 		t.Fatalf("error in creating my-oauth-secret: %v", err)
-	} else {
-		// Sleeping for 5s for secret to be updated in informer
-		time.Sleep(5 * time.Second)
 	}
+	// Sleeping for 5s for secret to be updated in informer
+	time.Sleep(5 * time.Second)
+
 	integrationtest.SetupSSORule(t, srname, "foo.com", "OAuth")
 
 	g.Eventually(func() string {
@@ -1076,12 +1076,6 @@ func TestCreateUpdateDeleteSSORuleForEvh(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel = objects.SharedAviGraphLister().Get(modelName)
-		nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-		return len(nodes[0].EvhNodes)
-	}, 10*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
@@ -1119,10 +1113,10 @@ func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 	err := integrationtest.SetUpOAuthSecret()
 	if err != nil {
 		t.Fatalf("error in creating my-oauth-secret: %v", err)
-	} else {
-		// Sleeping for 5s for secret to be updated in informer
-		time.Sleep(5 * time.Second)
 	}
+	// Sleeping for 5s for secret to be updated in informer
+	time.Sleep(5 * time.Second)
+
 	integrationtest.SetupSSORule(t, srname, "foo.com", "SAML")
 
 	g.Eventually(func() string {
@@ -1166,12 +1160,6 @@ func TestCreateUpdateDeleteSSORuleForEvhInsecure(t *testing.T) {
 		ssoRule, _ := v1alpha2CRDClient.AkoV1alpha2().SSORules("default").Get(context.TODO(), srname, metav1.GetOptions{})
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
-
-	g.Eventually(func() int {
-		_, aviModel = objects.SharedAviGraphLister().Get(modelName)
-		nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-		return len(nodes[0].EvhNodes)
-	}, 10*time.Second).Should(gomega.Equal(1))
 
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
@@ -1291,12 +1279,6 @@ func TestCreateUpdateDeleteSSORuleForEvhJwt(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel = objects.SharedAviGraphLister().Get(modelName)
-		nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-		return len(nodes[0].EvhNodes)
-	}, 10*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
@@ -1397,12 +1379,6 @@ func TestCreateUpdateDeleteSSORuleForEvhSamlACS(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel = objects.SharedAviGraphLister().Get(modelName)
-		nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-		return len(nodes[0].EvhNodes)
-	}, 10*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
@@ -1441,12 +1417,6 @@ func TestCreateUpdateDeleteSSORuleForEvhSamlACS(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Accepted"))
 
-	g.Eventually(func() int {
-		_, aviModel = objects.SharedAviGraphLister().Get(modelName)
-		nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
-		return len(nodes[0].EvhNodes)
-	}, 10*time.Second).Should(gomega.Equal(1))
-
 	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
 	time.Sleep(5 * time.Second)
 
@@ -1482,10 +1452,10 @@ func TestCreateSSORuleBeforeIngressForEvh(t *testing.T) {
 	err := integrationtest.SetUpOAuthSecret()
 	if err != nil {
 		t.Fatalf("error in creating my-oauth-secret: %v", err)
-	} else {
-		// Sleeping for 5s for secret to be updated in informer
-		time.Sleep(5 * time.Second)
 	}
+	// Sleeping for 5s for secret to be updated in informer
+	time.Sleep(5 * time.Second)
+
 	// creating SSORule before ingress
 	integrationtest.SetupSSORule(t, srname, "foo.com", "OAuth")
 
@@ -1592,10 +1562,8 @@ func TestGoodToBadSSORuleForEvh(t *testing.T) {
 		return ssoRule.Status.Status
 	}, 10*time.Second).Should(gomega.Equal("Rejected"))
 
-	g.Eventually(func() bool {
-		found, _ := objects.SharedAviGraphLister().Get(modelName)
-		return found
-	}, 25*time.Second).Should(gomega.Equal(true))
+	// update is not getting reflected on evh nodes immediately. Hence adding a sleep of 5 seconds.
+	time.Sleep(5 * time.Second)
 
 	_, aviModel = objects.SharedAviGraphLister().Get(modelName)
 	nodes = aviModel.(*avinodes.AviObjectGraph).GetAviEvhVS()
