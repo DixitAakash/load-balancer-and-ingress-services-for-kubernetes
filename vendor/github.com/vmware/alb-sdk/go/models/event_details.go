@@ -17,6 +17,9 @@ type EventDetails struct {
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	AlbservicesCaseDetails *ALBServicesCase `json:"albservices_case_details,omitempty"`
 
+	// ALBservices file download event details. Field introduced in 30.2.1. Allowed in Enterprise edition with any value, Enterprise with Cloud Services edition.
+	AlbservicesFileDownloadDetails *ALBServicesFileDownload `json:"albservices_file_download_details,omitempty"`
+
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	AlbservicesFileUploadDetails *ALBServicesFileUpload `json:"albservices_file_upload_details,omitempty"`
 
@@ -377,6 +380,9 @@ type EventDetails struct {
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	OsVnicDetails *OpenStackVnicChange `json:"os_vnic_details,omitempty"`
 
+	// PKIProfile event. Field introduced in 30.2.1. Allowed in Enterprise edition with any value, Enterprise with Cloud Services edition.
+	PkiprofileDetails *PKIprofileDetails `json:"pkiprofile_details,omitempty"`
+
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	PoolDeploymentFailureInfo *PoolDeploymentFailureInfo `json:"pool_deployment_failure_info,omitempty"`
 
@@ -406,6 +412,9 @@ type EventDetails struct {
 
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	RebootSeDetails *RmRebootSeEventDetails `json:"reboot_se_details,omitempty"`
+
+	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
+	SamlMetadataFailedEvents *SamlMetadataUpdateFailedDetails `json:"saml_metadata_failed_events,omitempty"`
 
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	SchedulerActionInfo *SchedulerActionDetails `json:"scheduler_action_info,omitempty"`
@@ -478,6 +487,9 @@ type EventDetails struct {
 
 	// SE NTP synchronization failed. Field introduced in 22.1.1. Allowed in Enterprise edition with any value, Enterprise with Cloud Services edition.
 	SeNtpSynchronizationFailed *SeNtpSynchronizationFailed `json:"se_ntp_synchronization_failed,omitempty"`
+
+	//  Field introduced in 30.2.1. Allowed in Enterprise edition with any value, Enterprise with Cloud Services edition.
+	SeObjsyncPeerDownDetails *SeObjsyncPeerDownDetails `json:"se_objsync_peer_down_details,omitempty"`
 
 	//  Allowed in Enterprise edition with any value, Essentials, Basic, Enterprise with Cloud Services edition.
 	SePersistenceDetails *SePersistenceEventDetails `json:"se_persistence_details,omitempty"`
