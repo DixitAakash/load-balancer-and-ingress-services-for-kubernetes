@@ -83,7 +83,7 @@ func (o *AviObjectGraph) BuildChildVS(key string, routeModel RouteModel, parentN
 	o.BuildPGPool(key, parentNsName, childNode, routeModel, rule)
 
 	// create vhmatch from the match
-	o.BuildVHMatch(key, childNode, routeModel, rule)
+	o.BuildVHMatch(key, childNode, rule, hosts)
 
 	// create the httppolicyset if the filter is present
 	o.BuildHTTPPolicySet(key, childNode, routeModel, rule)
@@ -164,10 +164,9 @@ func (o *AviObjectGraph) BuildPGPool(key, parentNsName string, childVsNode *node
 	}
 }
 
-func (o *AviObjectGraph) BuildVHMatch(key string, vsNode *nodes.AviEvhVsNode, routeModel RouteModel, rule *Rule) {
+func (o *AviObjectGraph) BuildVHMatch(key string, vsNode *nodes.AviEvhVsNode, rule *Rule, hosts []string) {
 	var vhMatches []*models.VHMatch
-
-	for _, host := range routeModel.ParseRouteRules().Hosts {
+	for _, host := range hosts {
 		hostname := host
 		vhMatch := &models.VHMatch{
 			Host: &hostname,

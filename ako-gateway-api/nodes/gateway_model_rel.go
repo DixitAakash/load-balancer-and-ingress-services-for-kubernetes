@@ -24,6 +24,7 @@ import (
 	akogatewayapilib "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/ako-gateway-api/lib"
 	akogatewayapiobjects "github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/ako-gateway-api/objects"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/lib"
+	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/internal/nodes"
 	"github.com/vmware/load-balancer-and-ingress-services-for-kubernetes/pkg/utils"
 )
 
@@ -236,7 +237,7 @@ func HTTPRouteToGateway(namespace, name, key string) ([]string, bool) {
 					}
 					hostnameMatched := false
 					for _, routeHostname := range hrObj.Spec.Hostnames {
-						if strings.HasSuffix(string(routeHostname), listenerHostname) {
+						if strings.HasSuffix(string(routeHostname), listenerHostname) && isValidHostName(string(routeHostname)) {
 							hostnameIntersection = append(hostnameIntersection, string(routeHostname))
 							hostnameMatched = true
 						}
@@ -382,4 +383,22 @@ func SecretToGateways(namespace, name, key string) ([]string, bool) {
 func NoOperation(namespace, name, key string) ([]string, bool) {
 	// No-op
 	return []string{}, true
+}
+
+func isValidHostName(hostname string) bool {
+	// Check if a hostname is valid or not by verifying if it has a prefix that
+	// matches any of the sub-domains.
+	subDomains := nodes.GetDefaultSubDomain()
+	if len(subDomains) == 0 {
+		// No IPAM DNS configured, we simply pass the hostname
+		return true
+	} else {
+		for _, subd := range subDomains {
+			if strings.HasSuffix(hostname, subd) {
+				return true
+			}
+		}
+	}
+	utils.AviLog.Warnf("Didn't find match for hostname :%s Available sub-domains:%s", hostname, subDomains)
+	return false
 }
