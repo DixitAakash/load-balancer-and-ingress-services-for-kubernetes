@@ -198,6 +198,31 @@ func BuildL7HostRule(host, key string, vsNode AviVsEvhSniModel) {
 			}
 		}
 
+		if hostrule.Spec.VirtualHost.UseRegex {
+			if lib.IsEvhEnabled() && !vsNode.IsSharedVS() {
+				utils.AviLog.Debugf("key: %s, Attach regex processing to evh child", key)
+				httpPolicyRefs := vsNode.GetHttpPolicyRefs()
+				if vsNode.IsSecure() {
+					//stringGroupName := vsNode.GetGeneratedFields().Fqdn
+					var matchCase string = "INSENSITIVE"
+					var matchCriteria string = "REGEX_MATCH"
+					var matchDecodedString bool = true
+					for _, httpPolicyRef := range httpPolicyRefs {
+						for _, requestRule := range httpPolicyRef.RequestRules {
+							pathMatch := &models.PathMatch{
+								MatchCase:          &matchCase,
+								MatchCriteria:      &matchCriteria,
+								MatchDecodedString: &matchDecodedString,
+								MatchStr:           vsNode.GetPaths(),
+							}
+							requestRule.Match.Path = pathMatch
+						}
+					}
+					vsNode.SetHttpPolicyRefs(httpPolicyRefs)
+				}
+			}
+		}
+
 		utils.AviLog.Infof("key: %s, Successfully attached hostrule %s on vsNode %s", key, hrNamespaceName, vsNode.GetName())
 	} else {
 		if vsNode.GetServiceMetadata().CRDStatus.Value != "" {

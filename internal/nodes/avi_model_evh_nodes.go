@@ -106,6 +106,8 @@ type AviVsEvhSniModel interface {
 	GetNetworkSecurityPolicyRef() *string
 	SetNetworkSecurityPolicyRef(*string)
 	GetTenant() string
+
+	GetPaths() []string
 }
 
 type AviEvhVsNode struct {
@@ -351,6 +353,10 @@ func (v *AviEvhVsNode) SetNetworkSecurityPolicyRef(networkSecuirtyPolicyRef *str
 
 func (v *AviEvhVsNode) GetTenant() string {
 	return v.Tenant
+}
+
+func (v *AviEvhVsNode) GetPaths() []string {
+	return v.Paths
 }
 
 func (o *AviObjectGraph) GetAviEvhVS() []*AviEvhVsNode {

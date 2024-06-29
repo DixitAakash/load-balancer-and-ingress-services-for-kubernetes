@@ -634,6 +634,10 @@ func (v *AviVsNode) GetTenant() string {
 	return v.Tenant
 }
 
+func (v *AviVsNode) GetPaths() []string {
+	return v.Paths
+}
+
 func (o *AviObjectGraph) GetAviVS() []*AviVsNode {
 	var aviVs []*AviVsNode
 	for _, model := range o.modelNodes {
