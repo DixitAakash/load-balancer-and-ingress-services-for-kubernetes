@@ -89,7 +89,7 @@ func SharedAviObjCache() *AviObjCache {
 func (c *AviObjCache) AviRefreshObjectCache(client []*clients.AviClient, cloud string, tenant string) {
 	var wg sync.WaitGroup
 	// We want to run 9 go routines which will simultanesouly fetch objects from the controller.
-	wg.Add(6)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		c.PopulateSSLKeyToCache(client[4], cloud, tenant)
@@ -101,12 +101,12 @@ func (c *AviObjCache) AviRefreshObjectCache(client []*clients.AviClient, cloud s
 	c.PopulatePkiProfilesToCache(client[0], tenant)
 	c.PopulatePoolsToCache(client[1], cloud, tenant)
 	c.PopulatePgDataToCache(client[2], cloud, tenant)
+	c.PopulateStringGroupDataToCache(client[8], cloud)
 
 	go func() {
 		defer wg.Done()
 		c.PopulateDSDataToCache(client[3], cloud, tenant)
 	}()
-
 	go func() {
 		defer wg.Done()
 		c.PopulateHttpPolicySetToCache(client[5], cloud, tenant)
@@ -114,10 +114,6 @@ func (c *AviObjCache) AviRefreshObjectCache(client []*clients.AviClient, cloud s
 	go func() {
 		defer wg.Done()
 		c.PopulateL4PolicySetToCache(client[6], cloud, tenant)
-	}()
-	go func() {
-		defer wg.Done()
-		c.PopulateStringGroupDataToCache(client[8], cloud)
 	}()
 
 	wg.Wait()
@@ -1499,6 +1495,7 @@ func (c *AviObjCache) AviPopulateOneVsHttpPolCache(client *clients.AviClient,
 		// Fetch the pgs associated with the http policyset object
 		var poolGroups []string
 		var pools []string
+		var stringGroupRefs []string
 		if httppol.HTTPRequestPolicy != nil {
 			for _, rule := range httppol.HTTPRequestPolicy.Rules {
 				if rule.SwitchingAction != nil {
@@ -1517,6 +1514,20 @@ func (c *AviObjCache) AviPopulateOneVsHttpPolCache(client *clients.AviClient,
 						}
 					}
 				}
+				if rule.Match != nil {
+					if rule.Match.Path != nil {
+						if len(rule.Match.Path.StringGroupRefs) > 0 {
+							for _, sg := range rule.Match.Path.StringGroupRefs {
+								sgUuid := ExtractUuid(sg, "stringgroup-.*.#")
+								// Search the string group name using this Uuid in the string group cache.
+								sgName, found := c.StringGroupCache.AviCacheGetNameByUuid(sgUuid)
+								if found {
+									stringGroupRefs = append(stringGroupRefs, sgName.(string))
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -1529,6 +1540,7 @@ func (c *AviObjCache) AviPopulateOneVsHttpPolCache(client *clients.AviClient,
 			PoolGroups:       poolGroups,
 			Pools:            pools,
 			LastModified:     *httppol.LastModified,
+			StringGroupRefs:  stringGroupRefs,
 		}
 		k := NamespaceName{Namespace: tenant, Name: *httppol.Name}
 		c.HTTPPolicyCache.AviCacheAdd(k, &httpPolCacheObj)
@@ -1673,9 +1685,10 @@ func (c *AviObjCache) AviPopulateAllHttpPolicySets(client *clients.AviClient, cl
 			continue
 		}
 
-		// Fetch the pgs associated with the http policyset object
+		// Fetch the pgs and string group refs associated with the http policyset object
 		var poolGroups []string
 		var pools []string
+		var stringGroupRefs []string
 		if httppol.HTTPRequestPolicy != nil {
 			for _, rule := range httppol.HTTPRequestPolicy.Rules {
 				if rule.SwitchingAction != nil {
@@ -1694,7 +1707,20 @@ func (c *AviObjCache) AviPopulateAllHttpPolicySets(client *clients.AviClient, cl
 						}
 					}
 				}
-
+				if rule.Match != nil {
+					if rule.Match.Path != nil {
+						if len(rule.Match.Path.StringGroupRefs) > 0 {
+							for _, sg := range rule.Match.Path.StringGroupRefs {
+								sgUuid := ExtractUuid(sg, "stringgroup-.*.#")
+								// Search the string group name using this Uuid in the string group cache.
+								sgName, found := c.StringGroupCache.AviCacheGetNameByUuid(sgUuid)
+								if found {
+									stringGroupRefs = append(stringGroupRefs, sgName.(string))
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		tenant := getTenantFromTenantRef(*httppol.TenantRef)
@@ -1706,6 +1732,7 @@ func (c *AviObjCache) AviPopulateAllHttpPolicySets(client *clients.AviClient, cl
 			PoolGroups:       poolGroups,
 			Pools:            pools,
 			LastModified:     *httppol.LastModified,
+			StringGroupRefs:  stringGroupRefs,
 		}
 		*httpPolicyData = append(*httpPolicyData, httpPolCacheObj)
 	}
@@ -1931,12 +1958,11 @@ func (c *AviObjCache) PopulateL4PolicySetToCache(client *clients.AviClient, clou
 
 func (c *AviObjCache) AviPopulateAllStringGroups(client *clients.AviClient, cloud string, StringGroupData *[]AviStringGroupCache, nextPage ...NextPage) (*[]AviStringGroupCache, int, error) {
 	var uri string
-	akoUser := lib.AKOUser
 
 	if len(nextPage) == 1 {
 		uri = nextPage[0].NextURI
 	} else {
-		uri = "/api/stringgroup/?" + "&include_name=true&created_by=" + akoUser
+		uri = "/api/stringgroup/?" + "&include_name=true&name.contains=" + lib.GetAKOUser()
 	}
 
 	result, err := lib.AviGetCollectionRaw(client, uri)
@@ -1966,7 +1992,13 @@ func (c *AviObjCache) AviPopulateAllStringGroups(client *clients.AviClient, clou
 			Name: *sg.Name,
 			Uuid: *sg.UUID,
 		}
-		checksum := lib.StringGroupChecksum(sg.Kv, *sg.Description, sg.Markers, true)
+		if sg.Description != nil {
+			stringGroupCacheObj.Description = *sg.Description
+		}
+		if sg.LongestMatch != nil {
+			stringGroupCacheObj.LongestMatch = *sg.LongestMatch
+		}
+		checksum := lib.StringGroupChecksum(sg.Kv, sg.Description, sg.Markers, sg.LongestMatch, true)
 
 		stringGroupCacheObj.CloudConfigCksum = checksum
 		*StringGroupData = append(*StringGroupData, stringGroupCacheObj)
@@ -2141,6 +2173,7 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient, cloud str
 				var poolgroupKeys []NamespaceName
 				var poolKeys []NamespaceName
 				var sharedVsOrL4 bool
+				var stringgroupKeys []NamespaceName
 
 				// Populate the VSVIP cache
 				if vs["vsvip_ref"] != nil {
@@ -2270,6 +2303,10 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient, cloud str
 									pgpoolKeys := c.AviPGPoolCachePopulate(client, cloud, pgName, tenant)
 									poolKeys = append(poolKeys, pgpoolKeys...)
 								}
+								for _, sgName := range httpObj.(*AviHTTPPolicyCache).StringGroupRefs {
+									sgKey := NamespaceName{Namespace: tenant, Name: sgName}
+									stringgroupKeys = append(stringgroupKeys, sgKey)
+								}
 								httpKeys = append(httpKeys, httpKey)
 							}
 						}
@@ -2290,21 +2327,22 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient, cloud str
 
 				// Populate the vscache meta object here.
 				vsMetaObj := AviVsCache{
-					Name:                 vs["name"].(string),
-					Tenant:               tenant,
-					Uuid:                 vs["uuid"].(string),
-					VSVipKeyCollection:   vsVipKey,
-					HTTPKeyCollection:    httpKeys,
-					DSKeyCollection:      dsKeys,
-					SSLKeyCertCollection: sslKeys,
-					PGKeyCollection:      poolgroupKeys,
-					PoolKeyCollection:    poolKeys,
-					CloudConfigCksum:     vs["cloud_config_cksum"].(string),
-					SNIChildCollection:   sni_child_collection,
-					ParentVSRef:          parentVSKey,
-					ServiceMetadataObj:   svc_mdata_obj,
-					L4PolicyCollection:   l4Keys,
-					LastModified:         vs["_last_modified"].(string),
+					Name:                     vs["name"].(string),
+					Tenant:                   tenant,
+					Uuid:                     vs["uuid"].(string),
+					VSVipKeyCollection:       vsVipKey,
+					HTTPKeyCollection:        httpKeys,
+					DSKeyCollection:          dsKeys,
+					SSLKeyCertCollection:     sslKeys,
+					PGKeyCollection:          poolgroupKeys,
+					PoolKeyCollection:        poolKeys,
+					CloudConfigCksum:         vs["cloud_config_cksum"].(string),
+					SNIChildCollection:       sni_child_collection,
+					ParentVSRef:              parentVSKey,
+					ServiceMetadataObj:       svc_mdata_obj,
+					L4PolicyCollection:       l4Keys,
+					LastModified:             vs["_last_modified"].(string),
+					StringGroupKeyCollection: stringgroupKeys,
 				}
 				if val, ok := vs["enable_rhi"]; ok {
 					vsMetaObj.EnableRhi = val.(bool)
@@ -2404,6 +2442,7 @@ func (c *AviObjCache) AviObjOneVSCachePopulate(client *clients.AviClient, cloud 
 				var poolgroupKeys []NamespaceName
 				var poolKeys []NamespaceName
 				var l4Keys []NamespaceName
+				var stringgroupKeys []NamespaceName
 
 				// Populate the VSVIP cache
 				if vs["vsvip_ref"] != nil {
@@ -2517,6 +2556,10 @@ func (c *AviObjCache) AviObjOneVSCachePopulate(client *clients.AviClient, cloud 
 									pgpoolKeys := c.AviPGPoolCachePopulate(client, cloud, pgName, tenant)
 									poolKeys = append(poolKeys, pgpoolKeys...)
 								}
+								for _, sgName := range httpObj.(*AviHTTPPolicyCache).StringGroupRefs {
+									sgKey := NamespaceName{Namespace: tenant, Name: sgName}
+									stringgroupKeys = append(stringgroupKeys, sgKey)
+								}
 								httpKeys = append(httpKeys, httpKey)
 							}
 						}
@@ -2537,20 +2580,21 @@ func (c *AviObjCache) AviObjOneVSCachePopulate(client *clients.AviClient, cloud 
 				}
 				// Populate the vscache meta object here.
 				vsMetaObj := AviVsCache{
-					Name:                 vs["name"].(string),
-					Tenant:               tenant,
-					Uuid:                 vs["uuid"].(string),
-					VSVipKeyCollection:   vsVipKey,
-					HTTPKeyCollection:    httpKeys,
-					DSKeyCollection:      dsKeys,
-					SSLKeyCertCollection: sslKeys,
-					PGKeyCollection:      poolgroupKeys,
-					PoolKeyCollection:    poolKeys,
-					CloudConfigCksum:     vs["cloud_config_cksum"].(string),
-					SNIChildCollection:   sni_child_collection,
-					ParentVSRef:          parentVSKey,
-					L4PolicyCollection:   l4Keys,
-					ServiceMetadataObj:   svc_mdata_obj,
+					Name:                     vs["name"].(string),
+					Tenant:                   tenant,
+					Uuid:                     vs["uuid"].(string),
+					VSVipKeyCollection:       vsVipKey,
+					HTTPKeyCollection:        httpKeys,
+					DSKeyCollection:          dsKeys,
+					SSLKeyCertCollection:     sslKeys,
+					PGKeyCollection:          poolgroupKeys,
+					PoolKeyCollection:        poolKeys,
+					CloudConfigCksum:         vs["cloud_config_cksum"].(string),
+					SNIChildCollection:       sni_child_collection,
+					ParentVSRef:              parentVSKey,
+					L4PolicyCollection:       l4Keys,
+					ServiceMetadataObj:       svc_mdata_obj,
+					StringGroupKeyCollection: stringgroupKeys,
 				}
 				if val, ok := vs["enable_rhi"]; ok {
 					vsMetaObj.EnableRhi = val.(bool)

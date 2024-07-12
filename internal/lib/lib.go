@@ -523,7 +523,8 @@ func GetSniNodeName(infrasetting, sniHostName string) string {
 }
 
 func GetSniPoolName(ingName, namespace, host, path, infrasetting string, dedicatedVS bool, args ...string) string {
-	path = strings.ReplaceAll(path, "/", "_")
+	// removing all disallowed characters from path name for pool naming
+	path = regexp.MustCompile(`[^a-zA-Z0-9 ]+`).ReplaceAllString(path, "_")
 	var poolName string
 	if infrasetting != "" {
 		poolName = NamePrefix + infrasetting + "-" + namespace + "-" + host + path + "-" + ingName
@@ -541,6 +542,18 @@ func GetSniPoolName(ingName, namespace, host, path, infrasetting string, dedicat
 	return poolName
 }
 
+func GetEncodedSniPGPoolNameforRegex(poolName string) string {
+	hash := sha1.Sum([]byte(poolName))
+	encodedStr := GetNamePrefix() + hex.EncodeToString(hash[:])
+	return encodedStr
+}
+
+func GetEncodedStringGroupName(host, path string) string {
+	hash := sha1.Sum([]byte(host + path))
+	encodedStr := GetAKOUser() + "-" + hex.EncodeToString(hash[:])
+	return encodedStr
+}
+
 func GetSniHttpPolName(namespace, host, infrasetting string) string {
 
 	if infrasetting != "" {
@@ -548,6 +561,7 @@ func GetSniHttpPolName(namespace, host, infrasetting string) string {
 	}
 	return Encode(NamePrefix+namespace+"-"+host, HTTPPS)
 }
+
 func GetSniHppMapName(ingName, namespace, host, path, infrasetting string, dedicatedVS bool) string {
 	path = strings.ReplaceAll(path, "/", "_")
 	hppmap := NamePrefix
@@ -563,7 +577,9 @@ func GetSniHppMapName(ingName, namespace, host, path, infrasetting string, dedic
 }
 
 func GetSniPGName(ingName, namespace, host, path, infrasetting string, dedicatedVS bool) string {
-	path = strings.ReplaceAll(path, "/", "_")
+	//path = strings.ReplaceAll(path, "/", "_")
+	// removing all disallowed characters from path name for pg naming
+	path = regexp.MustCompile(`[^a-zA-Z0-9 ]+`).ReplaceAllString(path, "_")
 	var sniPGName string
 	if infrasetting != "" {
 		sniPGName = NamePrefix + infrasetting + "-" + namespace + "-" + host + path + "-" + ingName
@@ -1250,8 +1266,11 @@ func DSChecksum(pgrefs []string, markers []*models.RoleFilterMatchLabel, populat
 	return checksum
 }
 
-func StringGroupChecksum(keyvalue []*models.KeyValue, description string, markers []*models.RoleFilterMatchLabel, populateCache bool) uint32 {
-	checksum := utils.Hash(description)
+func StringGroupChecksum(keyvalue []*models.KeyValue, description *string, markers []*models.RoleFilterMatchLabel, longestMatch *bool, populateCache bool) uint32 {
+	var checksum uint32
+	if description != nil {
+		checksum += utils.Hash(*description)
+	}
 	if populateCache {
 		if markers != nil {
 			checksum += ObjectLabelChecksum(markers)
@@ -1260,6 +1279,9 @@ func StringGroupChecksum(keyvalue []*models.KeyValue, description string, marker
 	}
 	checksum += GetClusterLabelChecksum()
 	checksum += utils.Hash(utils.Stringify(keyvalue))
+	if longestMatch != nil {
+		checksum += utils.Hash(utils.Stringify(*longestMatch))
+	}
 	return checksum
 }
 

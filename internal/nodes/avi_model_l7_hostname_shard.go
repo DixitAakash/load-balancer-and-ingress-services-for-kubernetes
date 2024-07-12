@@ -716,6 +716,7 @@ func (o *AviObjectGraph) BuildModelGraphForSNI(routeIgrObj RouteIngressModel, in
 	}
 	if certsBuilt {
 		isIngr := routeIgrObj.GetType() == utils.Ingress
+		RemoveEncodedPGPoolForSni(sniNode)
 		o.BuildPolicyPGPoolsForSNI(vsNode, sniNode, namespace, ingName, tlssetting, sniSecretName, key, isIngr, infraSetting, sniHost)
 		if !isDedicated {
 			foundSniModel := FindAndReplaceSniInModel(sniNode, vsNode, key)
@@ -724,6 +725,9 @@ func (o *AviObjectGraph) BuildModelGraphForSNI(routeIgrObj RouteIngressModel, in
 			}
 		}
 		RemoveRedirectHTTPPolicyInModel(vsNode[0], sniHostToRemove, key)
+		if !isDedicated {
+			RemoveRedirectHTTPPolicyInSniNode(sniNode)
+		}
 		if tlssetting.redirect {
 			if gsFqdn != "" {
 				sniHosts = append(sniHosts, gsFqdn)

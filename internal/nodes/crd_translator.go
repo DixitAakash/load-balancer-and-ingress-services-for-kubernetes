@@ -21,6 +21,7 @@ import (
 
 	"github.com/jinzhu/copier"
 	"github.com/vmware/alb-sdk/go/models"
+	avimodels "github.com/vmware/alb-sdk/go/models"
 	"google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 
@@ -70,6 +71,7 @@ func BuildL7HostRule(host, key string, vsNode AviVsEvhSniModel) {
 	vsHTTPPolicySets := []string{}
 	vsDatascripts := []string{}
 	var analyticsPolicy *models.AnalyticsPolicy
+	var vsStringGroupRefs []*AviStringGroupNode
 
 	// Get the existing VH domain names and then manipulate it based on the aliases in Hostrule CRD.
 	VHDomainNames := vsNode.GetVHDomainNames()
@@ -198,24 +200,107 @@ func BuildL7HostRule(host, key string, vsNode AviVsEvhSniModel) {
 			}
 		}
 
-		if hostrule.Spec.VirtualHost.UseRegex {
-			if lib.IsEvhEnabled() && !vsNode.IsSharedVS() {
-				utils.AviLog.Debugf("key: %s, Attach regex processing to evh child", key)
-				httpPolicyRefs := vsNode.GetHttpPolicyRefs()
-				if vsNode.IsSecure() {
+		if !hostrule.Spec.VirtualHost.HTTPPolicy.Overwrite && (hostrule.Spec.VirtualHost.UseRegex || hostrule.Spec.VirtualHost.ApplicationRootPath != "") {
+			if !vsNode.IsSharedVS() {
+				if !lib.IsEvhEnabled() && vsNode.IsDedicatedVS() && !vsNode.IsSecure() {
+					utils.AviLog.Debugf("key: %s, Regex and App-root are not supported for insecure SNI virtual service", key)
+				} else {
+					httpPolicyRefs := vsNode.GetHttpPolicyRefs()
 					//stringGroupName := vsNode.GetGeneratedFields().Fqdn
-					var matchCase string = "INSENSITIVE"
-					var matchCriteria string = "REGEX_MATCH"
-					var matchDecodedString bool = true
+					//var matchCase string = "INSENSITIVE"
+					//var matchCriteria string = "REGEX_MATCH"
+					//var matchDecodedString bool = true
 					for _, httpPolicyRef := range httpPolicyRefs {
-						for _, requestRule := range httpPolicyRef.RequestRules {
-							pathMatch := &models.PathMatch{
-								MatchCase:          &matchCase,
-								MatchCriteria:      &matchCriteria,
-								MatchDecodedString: &matchDecodedString,
-								MatchStr:           vsNode.GetPaths(),
+						var regexhppMap []AviHostPathPortPoolPG
+						var redirectPort *AviRedirectPort
+						for _, hppMap := range httpPolicyRef.HppMap {
+							if hostrule.Spec.VirtualHost.ApplicationRootPath != "" {
+								if hppMap.Path != nil && len(hppMap.Path) > 0 {
+									path := hppMap.Path[0]
+									if path == "/" {
+										var protocol string
+										if hppMap.SvcPort == 443 {
+											protocol = "HTTPS"
+										} else {
+											protocol = "HTTP"
+										}
+										redirectPort = &AviRedirectPort{
+											StatusCode:    lib.STATUS_REDIRECT,
+											Protocol:      protocol,
+											Path:          path,
+											RedirectPort:  int32(hppMap.SvcPort),
+											RedirectPath:  hostrule.Spec.VirtualHost.ApplicationRootPath[1:],
+											MatchCriteria: "EQUALS",
+										}
+										if !hostrule.Spec.VirtualHost.UseRegex {
+											hppMap.Path[0] = hostrule.Spec.VirtualHost.ApplicationRootPath
+										}
+									}
+								}
 							}
-							requestRule.Match.Path = pathMatch
+							if hostrule.Spec.VirtualHost.UseRegex {
+								if hppMap.Path != nil && len(hppMap.Path) > 0 {
+									var regexStringGroupName string
+									path := hppMap.Path[0]
+									if hostrule.Spec.VirtualHost.ApplicationRootPath != "" && path == "/" {
+										path = hostrule.Spec.VirtualHost.ApplicationRootPath
+									}
+									regexStringGroupName = lib.GetEncodedStringGroupName(host, path)
+									kv := &avimodels.KeyValue{
+										Key: &path,
+									}
+									key_value_sg_type := "SG_TYPE_KEYVAL"
+									hppMap.MatchCase = "INSENSITIVE"
+									hppMap.MatchCriteria = "REGEX_MATCH"
+									hppMap.MatchDecodedString = true
+
+									//regexStringGroup := []string{"/api/stringgroup?name=regex_string_group"}
+									// If node not found, add node
+									tenant := lib.GetTenant()
+									longestMatch := true
+									regexStringGroup := &avimodels.StringGroup{
+										TenantRef:    &tenant,
+										Type:         &key_value_sg_type,
+										LongestMatch: &longestMatch,
+										Name:         &regexStringGroupName,
+										Kv:           []*avimodels.KeyValue{kv},
+									}
+									aviStringGroupNode := AviStringGroupNode{StringGroup: regexStringGroup}
+									aviStringGroupNode.CloudConfigCksum = aviStringGroupNode.GetCheckSum()
+									vsStringGroupRefs = append(vsStringGroupRefs, &aviStringGroupNode)
+									stringGroupRef := []string{"/api/stringgroup?name=" + regexStringGroupName}
+									hppMap.StringGroupRefs = stringGroupRef
+									//hppMap.Path = nil
+									if !lib.IsEvhEnabled() {
+										if hppMap.Pool != "" {
+											hppMap.Pool = lib.GetEncodedSniPGPoolNameforRegex(hppMap.Pool)
+										}
+										if hppMap.PoolGroup != "" {
+											hppMap.PoolGroup = lib.GetEncodedSniPGPoolNameforRegex(hppMap.PoolGroup)
+										}
+									}
+									hppMap.CalculateCheckSum()
+								}
+							}
+							regexhppMap = append(regexhppMap, hppMap)
+						}
+						httpPolicyRef.HppMap = regexhppMap
+						if redirectPort != nil {
+							httpPolicyRef.RedirectPorts = []AviRedirectPort{*redirectPort}
+						}
+					}
+					if !lib.IsEvhEnabled() && hostrule.Spec.VirtualHost.UseRegex {
+						for _, pool := range vsNode.GetPoolRefs() {
+							pool.Name = lib.GetEncodedSniPGPoolNameforRegex(pool.Name)
+						}
+						for _, pg := range vsNode.GetPoolGroupRefs() {
+							pg.Name = lib.GetEncodedSniPGPoolNameforRegex(pg.Name)
+							for _, member := range pg.Members {
+								poolName := strings.TrimPrefix(*member.PoolRef, "/api/pool?name=")
+								encodedPoolName := lib.GetEncodedSniPGPoolNameforRegex(poolName)
+								poolRef := "/api/pool?name=" + encodedPoolName
+								member.PoolRef = &poolRef
+							}
 						}
 					}
 					vsNode.SetHttpPolicyRefs(httpPolicyRefs)
@@ -256,6 +341,7 @@ func BuildL7HostRule(host, key string, vsNode AviVsEvhSniModel) {
 	serviceMetadataObj := vsNode.GetServiceMetadata()
 	serviceMetadataObj.CRDStatus = crdStatus
 	vsNode.SetServiceMetadata(serviceMetadataObj)
+	vsNode.SetStringGroupRefs(vsStringGroupRefs)
 
 }
 

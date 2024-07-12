@@ -377,7 +377,7 @@ func (o *AviObjectGraph) BuildPolicyPGPoolsForSNI(vsNode []*AviVsNode, tlsNode *
 		for _, path := range paths.ingressHPSvc {
 			isPoolNameLenExceedAviLimit := false
 			isPGNameLenExceedAviLimit := false
-			httpPGPath := AviHostPathPortPoolPG{Host: pathFQDNs}
+			httpPGPath := AviHostPathPortPoolPG{Host: pathFQDNs, SvcPort: int(path.Port)}
 
 			if path.PathType == networkingv1.PathTypeExact {
 				httpPGPath.MatchCriteria = "EQUALS"
@@ -680,9 +680,36 @@ func RemoveRedirectHTTPPolicyInModel(vsNode *AviVsNode, hostnames []string, key 
 					vsNode.HttpPolicyRefs = append(vsNode.HttpPolicyRefs[:i], vsNode.HttpPolicyRefs[i+1:]...)
 					utils.AviLog.Infof("key: %s, msg: removed redirect policy %s in model", key, policy.Name)
 				}
+			} else if policy.HppMap != nil && policy.RedirectPorts != nil && len(policy.RedirectPorts) > 0 {
+				policy.RedirectPorts = nil
 			}
 		}
 	}
+}
+
+// RemoveRedirectHTTPPolicyInSniNode removes the redirect ports in sni child
+func RemoveRedirectHTTPPolicyInSniNode(vsNode *AviVsNode) {
+	for _, policy := range vsNode.HttpPolicyRefs {
+		policy.RedirectPorts = nil
+	}
+}
+
+// Secure Sni child vs will have enocded PG and Pool names if use-regex is true
+func RemoveEncodedPGPoolForSni(vsNode *AviVsNode) {
+	var pgRefs []*AviPoolGroupNode
+	var poolRefs []*AviPoolNode
+	for _, pg := range vsNode.PoolGroupRefs {
+		if !lib.IsNameEncoded(pg.Name) {
+			pgRefs = append(pgRefs, pg)
+		}
+	}
+	vsNode.PoolGroupRefs = pgRefs
+	for _, pool := range vsNode.PoolRefs {
+		if !lib.IsNameEncoded(pool.Name) {
+			poolRefs = append(poolRefs, pool)
+		}
+	}
+	vsNode.PoolRefs = poolRefs
 }
 func RemoveFqdnFromVIP(vsNode *AviVsNode, key string, Fqdns []string) {
 	if len(vsNode.VSVIPRefs) > 0 {
