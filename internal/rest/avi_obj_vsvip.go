@@ -106,6 +106,7 @@ func (rest *RestOperations) AviVsVipBuild(vsvip_meta *nodes.AviVSVIPNode, vsCach
 
 			// This would throw an error for advl4 the error is propagated to the gateway status.
 			if vsvip_meta.IPAddress != "" {
+				utils.AviLog.Infof("Static IPAddress to be used for vsvip : %s", vsvip_meta.IPAddress)
 				if utils.IsV4(vsvip_meta.IPAddress) {
 					vip.IPAddress = &avimodels.IPAddr{Type: &ipType, Addr: &vsvip_meta.IPAddress}
 				} else {
@@ -114,7 +115,7 @@ func (rest *RestOperations) AviVsVipBuild(vsvip_meta *nodes.AviVSVIPNode, vsCach
 			}
 
 			if lib.IsPublicCloud() && lib.GetCloudType() != lib.CLOUD_GCP {
-				vips := networkNamesToVips(vsvip_meta.VipNetworks, vsvip_meta.EnablePublicIP)
+				vips := networkNamesToVips(vsvip_meta.VipNetworks, vsvip_meta.EnablePublicIP, vsvip_meta.IPAddress)
 				vsvip.Vip = []*avimodels.Vip{}
 				vsvip.Vip = append(vsvip.Vip, vips...)
 			} else if lib.GetCloudType() == lib.CLOUD_NSXT && lib.GetVPCMode() {
@@ -184,6 +185,7 @@ func (rest *RestOperations) AviVsVipBuild(vsvip_meta *nodes.AviVSVIPNode, vsCach
 
 		// configuring static IP, from gateway.Addresses (advl4, svcapi) and service.loadBalancerIP (l4)
 		if vsvip_meta.IPAddress != "" {
+			utils.AviLog.Infof("Static IPAddress to be used for vsvip : %s", vsvip_meta.IPAddress)
 			if utils.IsV4(vsvip_meta.IPAddress) {
 				vip.IPAddress = &avimodels.IPAddr{Type: &ipType, Addr: &vsvip_meta.IPAddress}
 			} else {
@@ -194,7 +196,7 @@ func (rest *RestOperations) AviVsVipBuild(vsvip_meta *nodes.AviVSVIPNode, vsCach
 		// selecting network with user input, in case user input is not provided AKO relies on
 		// usable network configuration in ipamdnsproviderprofile
 		if lib.IsPublicCloud() && lib.GetCloudType() != lib.CLOUD_GCP {
-			vips = networkNamesToVips(vsvip_meta.VipNetworks, vsvip_meta.EnablePublicIP)
+			vips = networkNamesToVips(vsvip_meta.VipNetworks, vsvip_meta.EnablePublicIP, vsvip_meta.IPAddress)
 		} else if lib.GetCloudType() == lib.CLOUD_NSXT && lib.GetVPCMode() {
 			vpcArr := strings.Split(vsvip_meta.T1Lr, "/")
 			vipNetwork := fmt.Sprintf("%s_AVISEPARATOR_%s_AVISEPARATOR_PUBLIC", vsvip_meta.Tenant, vpcArr[len(vpcArr)-1])
@@ -717,9 +719,9 @@ func (rest *RestOperations) AviVsVipCacheDel(rest_op *utils.RestOp, vsKey avicac
 	return nil
 }
 
-func networkNamesToVips(vipNetworks []akov1beta1.AviInfraSettingVipNetwork, enablePublicIP *bool) []*avimodels.Vip {
+func networkNamesToVips(vipNetworks []akov1beta1.AviInfraSettingVipNetwork, enablePublicIP *bool, ipAddress string) []*avimodels.Vip {
 	var vipList []*avimodels.Vip
-	autoAllocate := true
+	autoAllocate, ipType, ip6Type := true, "V4", "V6"
 
 	for vipIDInt, vipNetwork := range vipNetworks {
 		vipID := strconv.Itoa(vipIDInt + 1)
@@ -727,6 +729,14 @@ func networkNamesToVips(vipNetworks []akov1beta1.AviInfraSettingVipNetwork, enab
 			VipID:                  &vipID,
 			AutoAllocateIP:         &autoAllocate,
 			AutoAllocateFloatingIP: enablePublicIP,
+		}
+		if lib.GetCloudType() == lib.CLOUD_AZURE && ipAddress != "" {
+			// configuring static IP, from gateway.Addresses (advl4, svcapi) and service.loadBalancerIP (l4)
+			if utils.IsV4(ipAddress) {
+				newVip.IPAddress = &avimodels.IPAddr{Type: &ipType, Addr: &ipAddress}
+			} else {
+				newVip.Ip6Address = &avimodels.IPAddr{Type: &ip6Type, Addr: &ipAddress}
+			}
 		}
 		newVip.SubnetUUID = proto.String(vipNetwork.NetworkName)
 		vipList = append(vipList, newVip)
