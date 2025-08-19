@@ -23,6 +23,7 @@ type AnalyticsPolicy struct {
 type BackendProperties struct {
 	AnalyticsPolicy                  *PoolAnalyticsPolicy `json:"analyticsPolicy,omitempty"`
 	ApplicationPersistenceProfileRef *string              `json:"applicationPersistenceProfileRef,omitempty"`
+	AviCrdRefs                       []*AviCrdRef         `json:"aviCrdRefs,omitempty"`
 	Enabled                          *bool                `json:"enabled,omitempty"`
 	HealthMonitorRefs                []string             `json:"healthMonitorRefs,omitempty"`
 	LbAlgorithm                      *string              `json:"lbAlgorithm,omitempty"`
@@ -115,4 +116,10 @@ type Service struct {
 type KindNameNamespace struct {
 	Kind *string `json:"kind,omitempty"`
 	Name *string `json:"name,omitempty"`
+}
+
+type AviCrdRef struct {
+	Group *string `json:"group,omitempty"`
+	Kind  *string `json:"kind,omitempty"`
+	Name  *string `json:"name,omitempty"`
 }

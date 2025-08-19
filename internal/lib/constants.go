@@ -96,6 +96,7 @@ const (
 	AviInfraSetting                            = "AviInfraSetting"
 	SSORule                                    = "SSORule"
 	L4Rule                                     = "L4Rule"
+	HealthMonitor                              = "HealthMonitor"
 	L7Rule                                     = "L7Rule"
 	IstioVirtualService                        = "IstioVirtualService"
 	IstioDestinationRule                       = "DestinationRule"

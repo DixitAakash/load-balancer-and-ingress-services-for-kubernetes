@@ -162,6 +162,27 @@ spec:
                         servers. The specific SSL profile defines which ciphers and
                         SSL versions will be supported.
                       type: string
+                    aviCrdRefs:
+                      description: References to AVI CRD objects that should be applied to the pool.
+                      items:
+                        properties:
+                          group:
+                            description: Group of AviCRD object
+                            type: string
+                          kind:
+                            description: Kind of AviCRD object
+                            type: string
+                            enum:
+                              - HealthMonitor
+                          name:
+                            description: Name of AviCRD object
+                            type: string
+                        required:
+                          - group
+                          - kind
+                          - name
+                        type: object
+                      type: array
                   required:
                   - port
                   - protocol

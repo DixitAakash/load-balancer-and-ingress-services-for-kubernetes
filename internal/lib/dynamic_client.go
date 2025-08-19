@@ -29,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -92,6 +93,12 @@ var (
 		Version:  "v1alpha1",
 		Resource: "capabilities",
 	}
+
+	HealthMonitorGVR = schema.GroupVersionResource{
+		Group:    "ako.vmware.com",
+		Version:  "v1alpha1",
+		Resource: "healthmonitors",
+	}
 )
 
 type BootstrapCRData struct {
@@ -144,6 +151,9 @@ type DynamicInformers struct {
 	AvailabilityZoneInformer informers.GenericInformer
 
 	VPCNetworkConfigurationInformer informers.GenericInformer
+
+	// AKO CRD informers
+	HealthMonitorInformer informers.GenericInformer
 }
 
 // NewDynamicInformers initializes the DynamicInformers struct
@@ -169,6 +179,9 @@ func NewDynamicInformers(client dynamic.Interface, akoInfra bool) *DynamicInform
 		informers.VPCNetworkConfigurationInformer = f.ForResource(VPCNetworkConfigurationGVR)
 	}
 
+	// Initialize HealthMonitor informer for L4Rule support
+	informers.HealthMonitorInformer = f.ForResource(HealthMonitorGVR)
+
 	dynamicInformerInstance = informers
 	return dynamicInformerInstance
 }
@@ -180,6 +193,48 @@ func GetDynamicInformers() *DynamicInformers {
 		return nil
 	}
 	return dynamicInformerInstance
+}
+
+// IsHealthMonitorProcessed checks if HealthMonitor CRD is processed by AKO CRD Operator
+// Returns (processed, ready, error)
+func IsHealthMonitorProcessed(key, namespace, name string, obj ...*unstructured.Unstructured) (bool, bool, error) {
+	clientSet := GetDynamicClientSet()
+	if clientSet == nil {
+		return false, false, fmt.Errorf("internal error in fetching HealthMonitor %s/%s object", namespace, name)
+	}
+	var object *unstructured.Unstructured
+	var err error
+	if len(obj) == 0 {
+		object, err = clientSet.Resource(HealthMonitorGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return false, false, fmt.Errorf("healthMonitor %s/%s not found", namespace, name)
+			}
+			return false, false, err
+		}
+	} else {
+		object = obj[0]
+	}
+
+	statusJSON, found, err := unstructured.NestedMap(object.UnstructuredContent(), "status")
+	if err != nil || !found {
+		utils.AviLog.Warnf("key:%s/%s, msg:HealthMonitor status not found: %+v", namespace, name, err)
+		return false, false, err
+	}
+	conditions, ok := statusJSON["conditions"]
+	if !ok || conditions.([]interface{}) == nil || len(conditions.([]interface{})) == 0 {
+		return false, false, fmt.Errorf("healthMonitor %s/%s is not processed by AKO CRD Operator", namespace, name)
+	}
+	for _, condition := range conditions.([]interface{}) {
+		conditionMap, ok := condition.(map[string]interface{})
+		if ok && conditionMap["type"] == "Ready" {
+			if conditionMap["status"] == "True" {
+				return true, true, nil
+			}
+			return true, false, nil
+		}
+	}
+	return false, false, nil
 }
 
 func GetNetworkInfoCRData() (map[string]string, map[string]string, map[string]map[string]struct{}) {
