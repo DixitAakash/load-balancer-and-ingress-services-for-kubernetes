@@ -831,6 +831,10 @@ func IsPrometheusEnabled() bool {
 }
 
 func IsAKOCRDOperatorEnabled() bool {
+	//Always start CRD informers and event handlers for VCF clusters
+	if utils.IsVCFCluster() {
+		return true
+	}
 	if ok, err := strconv.ParseBool(os.Getenv("AKO_CRD_OPERATOR_ENABLED")); err == nil {
 		if ok {
 			utils.AviLog.Debugf("AKO CRD Operator is enabled")
