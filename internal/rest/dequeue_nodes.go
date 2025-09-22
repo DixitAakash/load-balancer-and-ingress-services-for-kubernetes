@@ -1949,6 +1949,43 @@ func (rest *RestOperations) KeyCertCU(sslkey_nodes []*nodes.AviTLSKeyCertNode, c
 func (rest *RestOperations) SSLKeyCertDelete(ssl_to_delete []avicache.NamespaceName, namespace string, rest_ops []*utils.RestOp, key string) []*utils.RestOp {
 	utils.AviLog.Debugf("key: %s, msg: about to delete ssl keycert %s", key, utils.Stringify(ssl_to_delete))
 	var noCARefRestOps []*utils.RestOp
+	var caCertsToDelete []string
+
+	// Build a reference count map of actual CA certificates still in use
+	actualCACertRefCount := make(map[string]int)
+
+	// Count references from all SSL certificates that are NOT being deleted
+	allSSLKeys := rest.cache.SSLKeyCache.AviGetAllKeys()
+	for _, sslKey := range allSSLKeys {
+		// Skip SSL certificates that are being deleted
+		skipSSL := false
+		for _, delSSL := range ssl_to_delete {
+			if sslKey.Namespace == namespace && sslKey.Name == delSSL.Name {
+				skipSSL = true
+				break
+			}
+		}
+		if skipSSL {
+			continue
+		}
+
+		// Count CA certificate references from remaining SSL certificates
+		if sslCache, ok := rest.cache.SSLKeyCache.AviCacheGet(sslKey); ok {
+			if sslCacheObj, ok := sslCache.(*avicache.AviSSLCache); ok {
+				if sslCacheObj.HasCARef {
+					// Count actual CA certificate references (what Avi Controller is using)
+					if sslCacheObj.ActualCACertName != "" {
+						actualCACertRefCount[sslCacheObj.ActualCACertName]++
+					}
+					// Also count intended CA certificate references (in case they exist separately)
+					if sslCacheObj.IntendedCACertName != "" && sslCacheObj.IntendedCACertName != sslCacheObj.ActualCACertName {
+						actualCACertRefCount[sslCacheObj.IntendedCACertName]++
+					}
+				}
+			}
+		}
+	}
+
 	defaultRouteCertName := lib.GetTLSKeyCertNodeName("", "", lib.GetDefaultSecretForRoutes())
 	defaultRouteAltCertName := lib.GetTLSKeyCertNodeName("", "", lib.GetDefaultSecretForRoutes()+"-alt")
 	for _, del_ssl := range ssl_to_delete {
@@ -1969,6 +2006,49 @@ func (rest *RestOperations) SSLKeyCertDelete(ssl_to_delete []avicache.NamespaceN
 			ssl_cache_obj, _ := ssl_cache.(*avicache.AviSSLCache)
 			restOp := rest.AviSSLKeyCertDel(ssl_cache_obj.Uuid, namespace)
 			restOp.ObjName = del_ssl.Name
+
+			// Track CA certificates that may need to be deleted
+			if ssl_cache_obj.HasCARef {
+				// We need to check both actual and intended CA certificate names
+				caCertNamesToCheck := make(map[string]bool)
+
+				// Add actual CA certificate name (what Avi Controller is actually using)
+				if ssl_cache_obj.ActualCACertName != "" {
+					caCertNamesToCheck[ssl_cache_obj.ActualCACertName] = true
+				}
+
+				// Add intended CA certificate name (what AKO originally intended to use)
+				// This handles cases where Avi Controller didn't deduplicate and both CA certs exist
+				if ssl_cache_obj.IntendedCACertName != "" && ssl_cache_obj.IntendedCACertName != ssl_cache_obj.ActualCACertName {
+					caCertNamesToCheck[ssl_cache_obj.IntendedCACertName] = true
+				}
+
+				// Check each CA certificate for deletion
+				for caCertName := range caCertNamesToCheck {
+					// Only delete CA certificate if no other SSL certificates reference it
+					if actualCACertRefCount[caCertName] == 0 {
+						// Check if CA certificate exists in cache before scheduling for deletion
+						caCertKey := avicache.NamespaceName{Namespace: namespace, Name: caCertName}
+						if _, ok := rest.cache.SSLKeyCache.AviCacheGet(caCertKey); ok {
+							// Avoid duplicates in deletion list
+							alreadyScheduled := false
+							for _, scheduled := range caCertsToDelete {
+								if scheduled == caCertName {
+									alreadyScheduled = true
+									break
+								}
+							}
+							if !alreadyScheduled {
+								caCertsToDelete = append(caCertsToDelete, caCertName)
+								utils.AviLog.Infof("key: %s, msg: Scheduling CA certificate %s for deletion (no longer referenced)", key, caCertName)
+							}
+						}
+					} else {
+						utils.AviLog.Debugf("key: %s, msg: CA certificate %s still has %d references, not deleting", key, caCertName, actualCACertRefCount[caCertName])
+					}
+				}
+			}
+
 			//Objects with a CA ref should be deleted first
 			if !ssl_cache_obj.HasCARef {
 				noCARefRestOps = append(noCARefRestOps, restOp)
@@ -1977,6 +2057,19 @@ func (rest *RestOperations) SSLKeyCertDelete(ssl_to_delete []avicache.NamespaceN
 			}
 		}
 	}
+
+	// Add CA certificate deletions at the end
+	for _, caCertName := range caCertsToDelete {
+		caCertKey := avicache.NamespaceName{Namespace: namespace, Name: caCertName}
+		if caCertCache, ok := rest.cache.SSLKeyCache.AviCacheGet(caCertKey); ok {
+			if caCertCacheObj, ok := caCertCache.(*avicache.AviSSLCache); ok {
+				caCertRestOp := rest.AviSSLKeyCertDel(caCertCacheObj.Uuid, namespace)
+				caCertRestOp.ObjName = caCertName
+				noCARefRestOps = append(noCARefRestOps, caCertRestOp)
+			}
+		}
+	}
+
 	rest_ops = append(rest_ops, noCARefRestOps...)
 	return rest_ops
 }

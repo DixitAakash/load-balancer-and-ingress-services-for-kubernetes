@@ -144,32 +144,56 @@ func (rest *RestOperations) AviSSLKeyCertAdd(rest_op *utils.RestOp, vsKey avicac
 			utils.AviLog.Warnf("Certificate not present in response %v", resp)
 			continue
 		}
-		var SSLKeyAndCertificate avimodels.SSLKeyAndCertificate
-		var cert, cacert string
+		var originalSSLObj avimodels.SSLKeyAndCertificate
+		var cert, intendedCACert, actualCACert string
 		switch rest_op.Obj.(type) {
 		case utils.AviRestObjMacro:
-			SSLKeyAndCertificate = rest_op.Obj.(utils.AviRestObjMacro).Data.(avimodels.SSLKeyAndCertificate)
+			originalSSLObj = rest_op.Obj.(utils.AviRestObjMacro).Data.(avimodels.SSLKeyAndCertificate)
 		case avimodels.SSLKeyAndCertificate:
-			SSLKeyAndCertificate = rest_op.Obj.(avimodels.SSLKeyAndCertificate)
+			originalSSLObj = rest_op.Obj.(avimodels.SSLKeyAndCertificate)
 		}
-		if SSLKeyAndCertificate.Certificate == nil {
+		if originalSSLObj.Certificate == nil {
 			continue
 		}
-		cert = *SSLKeyAndCertificate.Certificate.Certificate
+		cert = *originalSSLObj.Certificate.Certificate
+
+		// Extract intended CA certificate name from AKO's original request
 		hasCA := false
-		if len(SSLKeyAndCertificate.CaCerts) > 0 {
-			if SSLKeyAndCertificate.CaCerts[0].CaRef != nil {
-				cacert = strings.TrimPrefix(*SSLKeyAndCertificate.CaCerts[0].CaRef, "/api/sslkeyandcertificate/?name=")
+		if len(originalSSLObj.CaCerts) > 0 {
+			if originalSSLObj.CaCerts[0].Name != nil {
+				intendedCACert = *originalSSLObj.CaCerts[0].Name
 				hasCA = true
 			}
 		}
+
+		// Extract actual CA certificate name from Avi Controller response (may be different due to deduplication)
+		if hasCA {
+			if caCertsInterface, exists := resp["ca_certs"]; exists {
+				if caCertsSlice, ok := caCertsInterface.([]interface{}); ok && len(caCertsSlice) > 0 {
+					if caCertMap, ok := caCertsSlice[0].(map[string]interface{}); ok {
+						if caRefInterface, exists := caCertMap["ca_ref"]; exists {
+							if caRefStr, ok := caRefInterface.(string); ok {
+								// Extract CA certificate name from reference like "/api/sslkeyandcertificate/?name=actual-ca-name"
+								if strings.Contains(caRefStr, "?name=") {
+									actualCACert = strings.Split(caRefStr, "?name=")[1]
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
 		emptyIngestionMarkers := utils.AviObjectMarkers{}
 		ssl_cache_obj := avicache.AviSSLCache{
-			Name:             name,
-			Tenant:           rest_op.Tenant,
-			Uuid:             uuid,
-			CloudConfigCksum: lib.SSLKeyCertChecksum(name, cert, cacert, emptyIngestionMarkers, SSLKeyAndCertificate.Markers, true),
-			HasCARef:         hasCA,
+			Name:   name,
+			Tenant: rest_op.Tenant,
+			Uuid:   uuid,
+			// Use intended CA certificate name for checksum calculation (for cache consistency)
+			CloudConfigCksum:   lib.SSLKeyCertChecksum(name, cert, intendedCACert, emptyIngestionMarkers, originalSSLObj.Markers, true),
+			HasCARef:           hasCA,
+			IntendedCACertName: intendedCACert, // Store intended CA certificate name
+			ActualCACertName:   actualCACert,   // Store actual CA certificate name for proper cleanup
 		}
 
 		k := avicache.NamespaceName{Namespace: rest_op.Tenant, Name: name}

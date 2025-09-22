@@ -288,16 +288,18 @@ func (v *AviVsCache) RemoveFromSNIChildCollection(k string) {
 }
 
 type AviSSLCache struct {
-	Name             string
-	Tenant           string
-	Uuid             string
-	CloudConfigCksum uint32
-	LastModified     string
-	InvalidData      bool
-	Cert             string
-	HasCARef         bool
-	CACertUUID       string
-	HasReference     bool
+	Name               string
+	Tenant             string
+	Uuid               string
+	CloudConfigCksum   uint32
+	LastModified       string
+	InvalidData        bool
+	Cert               string
+	HasCARef           bool
+	CACertUUID         string
+	IntendedCACertName string // The CA certificate name AKO originally intended to use
+	ActualCACertName   string // The actual CA certificate name used by Avi Controller (may differ from intended due to deduplication)
+	HasReference       bool
 }
 
 type AviPkiProfileCache struct {
