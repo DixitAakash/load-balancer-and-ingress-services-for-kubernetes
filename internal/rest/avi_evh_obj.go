@@ -136,7 +136,12 @@ func (rest *RestOperations) RestOperationForEvh(vsName string, namespace string,
 		return
 	}
 
-	for _, evhNode := range aviVsNode.EvhNodes {
+	utils.AviLog.Infof("key: %s, msg: DEBUG REST layer: Parent VS has %d EvhNodes to process", key, len(aviVsNode.EvhNodes))
+	for i, evhNode := range aviVsNode.EvhNodes {
+		utils.AviLog.Infof("key: %s, msg: DEBUG REST layer: processing EVH node[%d]: %s, PoolRefs: %d, PoolGroupRefs: %d", key, i, evhNode.Name, len(evhNode.PoolRefs), len(evhNode.PoolGroupRefs))
+		if len(evhNode.PoolRefs) > 0 {
+			utils.AviLog.Infof("key: %s, msg: DEBUG REST layer: First pool in child: Name=%s, Port=%d, Tenant=%s", key, evhNode.PoolRefs[0].Name, evhNode.PoolRefs[0].Port, evhNode.PoolRefs[0].Tenant)
+		}
 		utils.AviLog.Debugf("key: %s, msg: processing EVH node: %s", key, evhNode.Name)
 		utils.AviLog.Debugf("key: %s, msg: probable EVH delete candidates: %s", key, sni_to_delete)
 		var evh_rest_ops []*utils.RestOp

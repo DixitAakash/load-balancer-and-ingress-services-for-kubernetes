@@ -98,11 +98,31 @@ func (rest *RestOperations) DequeueNodes(key string) {
 			utils.AviLog.Debugf("Empty Model found, skipping")
 			return
 		}
+
+		// DEBUG: Log model state before GetCopy
+		evhNodesBefore := avimodel.GetAviEvhVS()
+		if len(evhNodesBefore) > 0 {
+			utils.AviLog.Infof("key: %s, msg: DEBUG BEFORE GetCopy: Parent VS %s has %d EvhNodes", key, evhNodesBefore[0].Name, len(evhNodesBefore[0].EvhNodes))
+			for i, child := range evhNodesBefore[0].EvhNodes {
+				utils.AviLog.Infof("key: %s, msg: DEBUG BEFORE GetCopy: Child[%d] %s has %d PoolRefs", key, i, child.Name, len(child.PoolRefs))
+			}
+		}
+
 		avimodel, ok = avimodel.GetCopy(key)
 		if !ok {
 			utils.AviLog.Warnf("key: %s, failed to get process model", key)
 			return
 		}
+
+		// DEBUG: Log model state after GetCopy
+		evhNodesAfter := avimodel.GetAviEvhVS()
+		if len(evhNodesAfter) > 0 {
+			utils.AviLog.Infof("key: %s, msg: DEBUG AFTER GetCopy: Parent VS %s has %d EvhNodes", key, evhNodesAfter[0].Name, len(evhNodesAfter[0].EvhNodes))
+			for i, child := range evhNodesAfter[0].EvhNodes {
+				utils.AviLog.Infof("key: %s, msg: DEBUG AFTER GetCopy: Child[%d] %s has %d PoolRefs", key, i, child.Name, len(child.PoolRefs))
+			}
+		}
+
 		if avimodel.IsVrf {
 			utils.AviLog.Infof("key: %s, msg: processing vrf object", key)
 			rest.vrfCU(key, name, avimodel)

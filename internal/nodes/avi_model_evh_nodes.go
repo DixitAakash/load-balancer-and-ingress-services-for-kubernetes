@@ -1696,18 +1696,26 @@ func (o *AviObjectGraph) BuildModelGraphForSecureEVH(routeIgrObj RouteIngressMod
 // Util functions
 
 func FindAndReplaceEvhInModel(currentEvhNode *AviEvhVsNode, modelEvhNodes []*AviEvhVsNode, key string) bool {
+	utils.AviLog.Infof("key: %s, msg: DEBUG FindAndReplaceEvhInModel: looking for child %s in %d existing children", key, currentEvhNode.Name, len(modelEvhNodes[0].EvhNodes))
+	utils.AviLog.Infof("key: %s, msg: DEBUG current child has %d PoolRefs, checksum: %d", key, len(currentEvhNode.PoolRefs), currentEvhNode.GetCheckSum())
+
 	for i, modelEvhNode := range modelEvhNodes[0].EvhNodes {
+		utils.AviLog.Infof("key: %s, msg: DEBUG comparing with existing child[%d]: %s, PoolRefs: %d, checksum: %d", key, i, modelEvhNode.Name, len(modelEvhNode.PoolRefs), modelEvhNode.GetCheckSum())
 		if currentEvhNode.Name == modelEvhNode.Name {
 			// Check if the checksums are same
 			if !(modelEvhNode.GetCheckSum() == currentEvhNode.GetCheckSum()) {
 				// The checksums are not same. Replace this evh node
+				utils.AviLog.Infof("key: %s, msg: DEBUG Checksums differ, replacing node. Old pools: %d, New pools: %d", key, len(modelEvhNode.PoolRefs), len(currentEvhNode.PoolRefs))
 				modelEvhNodes[0].EvhNodes = append(modelEvhNodes[0].EvhNodes[:i], modelEvhNodes[0].EvhNodes[i+1:]...)
 				modelEvhNodes[0].EvhNodes = append(modelEvhNodes[0].EvhNodes, currentEvhNode)
 				utils.AviLog.Infof("key: %s, msg: replaced evh node in model: %s", key, currentEvhNode.Name)
+			} else {
+				utils.AviLog.Infof("key: %s, msg: DEBUG Checksums match, not replacing. Both have %d PoolRefs", key, len(currentEvhNode.PoolRefs))
 			}
 			return true
 		}
 	}
+	utils.AviLog.Infof("key: %s, msg: DEBUG Child %s NOT found in model", key, currentEvhNode.Name)
 	return false
 }
 

@@ -268,6 +268,16 @@ func saveAviModel(modelName string, aviGraph *nodes.AviObjectGraph, key string) 
 		utils.AviLog.Infof("key: %s, msg: Disable Sync is True, model %s can not be saved", key, modelName)
 		return false
 	}
+
+	// DEBUG: Log model state before saving
+	evhNodes := aviGraph.GetAviEvhVS()
+	if len(evhNodes) > 0 {
+		utils.AviLog.Infof("key: %s, msg: DEBUG saveAviModel: Parent VS %s has %d EvhNodes", key, evhNodes[0].Name, len(evhNodes[0].EvhNodes))
+		for i, child := range evhNodes[0].EvhNodes {
+			utils.AviLog.Infof("key: %s, msg: DEBUG saveAviModel: Child[%d] %s has %d PoolRefs, %d PoolGroupRefs", key, i, child.Name, len(child.PoolRefs), len(child.PoolGroupRefs))
+		}
+	}
+
 	found, aviModel := objects.SharedAviGraphLister().Get(modelName)
 	if found && aviModel != nil {
 		prevChecksum := aviModel.(*nodes.AviObjectGraph).GraphChecksum
@@ -283,6 +293,7 @@ func saveAviModel(modelName string, aviGraph *nodes.AviObjectGraph, key string) 
 	aviGraph.SetRetryCounter()
 	aviGraph.CalculateCheckSum()
 	objects.SharedAviGraphLister().Save(modelName, aviGraph)
+	utils.AviLog.Infof("key: %s, msg: DEBUG Model saved: %s", key, modelName)
 	return true
 }
 

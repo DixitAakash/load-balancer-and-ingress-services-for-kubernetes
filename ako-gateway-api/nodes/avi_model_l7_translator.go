@@ -150,17 +150,28 @@ func (o *AviObjectGraph) BuildChildVS(key string, routeModel RouteModel, parentN
 
 	// create pg pool from the backend
 	o.BuildPGPool(key, parentNsName, childNode, routeModel, rule)
+	utils.AviLog.Infof("key: %s, msg: DEBUG After BuildPGPool, childNode %s has %d PoolRefs, %d PoolGroupRefs", key, childNode.Name, len(childNode.PoolRefs), len(childNode.PoolGroupRefs))
+	if len(childNode.PoolRefs) > 0 {
+		utils.AviLog.Infof("key: %s, msg: DEBUG First pool: Name=%s, Port=%d, Tenant=%s, ServerCount=%d", key, childNode.PoolRefs[0].Name, childNode.PoolRefs[0].Port, childNode.PoolRefs[0].Tenant, len(childNode.PoolRefs[0].Servers))
+	}
 
 	// create the httppolicyset if the filter is present
 	o.BuildHTTPPolicySet(key, childNode, routeModel, rule, 0, childVSName)
 	// Apply Extension Ref
 	o.ApplyRuleExtensionRefs(key, childNode, routeModel, rule)
+
+	utils.AviLog.Infof("key: %s, msg: DEBUG Before FindAndReplaceEvhInModel, childNode %s has %d PoolRefs", key, childNode.Name, len(childNode.PoolRefs))
+	utils.AviLog.Infof("key: %s, msg: DEBUG Parent has %d EvhNodes before FindAndReplaceEvhInModel", key, len(parentNode[0].EvhNodes))
 	foundEvhModel := nodes.FindAndReplaceEvhInModel(childNode, parentNode, key)
 	if !foundEvhModel {
+		utils.AviLog.Infof("key: %s, msg: DEBUG Child VS not found in model, appending new child", key)
 		parentNode[0].EvhNodes = append(parentNode[0].EvhNodes, childNode)
 		utils.AviLog.Debugf("key: %s, msg: added child vs %s to the parent vs %s", key, utils.Stringify(parentNode[0].EvhNodes), childNode.VHParentName)
 		akogatewayapiobjects.GatewayApiLister().UpdateRouteChildVSMappings(routeModel.GetType()+"/"+routeModel.GetNamespace()+"/"+routeModel.GetName(), childVSName)
+	} else {
+		utils.AviLog.Infof("key: %s, msg: DEBUG Child VS found in model and replaced/updated", key)
 	}
+	utils.AviLog.Infof("key: %s, msg: DEBUG After FindAndReplaceEvhInModel, parent has %d EvhNodes", key, len(parentNode[0].EvhNodes))
 	utils.AviLog.Infof("key: %s, msg: processing of child vs %s attached to parent vs %s completed", key, childNode.Name, childNode.VHParentName)
 }
 
