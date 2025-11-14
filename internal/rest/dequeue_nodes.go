@@ -902,6 +902,43 @@ func (rest *RestOperations) AviRestOperateWrapper(aviClient *clients.AviClient, 
 	}
 }
 
+// clearHTTPPolicySetsFromCache clears HTTPPolicySet entries from cache when they're missing on controller
+// This allows them to be recreated on retry
+func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, aviObjKey avicache.NamespaceName, key string) {
+	// Extract HTTPPolicySet references from the VS object
+	var httpPolicyRefs []*avimodels.HTTPPolicies
+
+	switch rest_op.Obj.(type) {
+	case utils.AviRestObjMacro:
+		vs := rest_op.Obj.(utils.AviRestObjMacro).Data.(avimodels.VirtualService)
+		httpPolicyRefs = vs.HTTPPolicies
+	case avimodels.VirtualService:
+		vs := rest_op.Obj.(avimodels.VirtualService)
+		httpPolicyRefs = vs.HTTPPolicies
+	case *avimodels.VirtualService:
+		vs := rest_op.Obj.(*avimodels.VirtualService)
+		httpPolicyRefs = vs.HTTPPolicies
+	}
+
+	// Clear HTTPPolicySet entries from cache so they will be recreated on retry
+	for _, httpPolicy := range httpPolicyRefs {
+		if httpPolicy.HTTPPolicySetRef != nil {
+			// Extract HTTPPolicy name from ref: "/api/httppolicyset/?name=<name>"
+			httpPolRef := *httpPolicy.HTTPPolicySetRef
+			if strings.Contains(httpPolRef, "?name=") {
+				parts := strings.Split(httpPolRef, "?name=")
+				if len(parts) > 1 {
+					httpPolName := parts[1]
+					httpPolKey := avicache.NamespaceName{Namespace: aviObjKey.Namespace, Name: httpPolName}
+					// Remove from cache so it will be recreated on retry
+					rest.cache.HTTPPolicyCache.AviCacheDelete(httpPolKey)
+					utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from cache for retry", key, httpPolName)
+				}
+			}
+		}
+	}
+}
+
 func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObjKey avicache.NamespaceName, rest_op *utils.RestOp, aviError session.AviError, c *clients.AviClient, avimodel *nodes.AviObjectGraph, key string, isEvh bool) (bool, bool, bool) {
 	var fastRetry bool
 	statuscode := aviError.HttpStatusCode
@@ -915,7 +952,22 @@ func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObj
 	if statuscode >= 500 && statuscode < 599 {
 		fastRetry = true
 		processNextObj = false
-	} else if statuscode >= 400 && statuscode < 499 { // Will account for more error codes.*/
+		// Handle specific 500 errors that indicate missing child objects due to race conditions
+		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "HTTPPolicySet object not found!") {
+			// The HTTPPolicySet was deleted by another concurrent operation (race condition during VS transition)
+			// Clear it from cache so on retry it will be recreated
+			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
+		}
+	} else if statuscode >= 400 && statuscode < 499 {
+		// Handle 400 errors that may result from retry attempts where cache is stale
+		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "HTTPPolicySet object not found!") {
+			// Same race condition, but on retry attempt - clear cache and retry again
+			utils.AviLog.Warnf("key: %s, msg: VS POST failed on retry due to missing HTTPPolicySet, clearing cache", key)
+			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
+			fastRetry = true
+			processNextObj = false
+		}
+		// Will account for more error codes.*/
 		fastRetry = true
 		// 404 means the object exists in our cache but not on the controller.
 		if statuscode == 404 {
