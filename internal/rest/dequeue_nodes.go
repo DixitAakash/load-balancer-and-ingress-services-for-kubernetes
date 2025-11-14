@@ -685,6 +685,7 @@ func (rest *RestOperations) ExecuteRestAndPopulateCache(rest_ops []*utils.RestOp
 
 func (rest *RestOperations) RefreshCacheForPartialOperation(rest_ops []*utils.RestOp, aviObjKey avicache.NamespaceName, aviclient *clients.AviClient, avimodel *nodes.AviObjectGraph, key string, isEvh bool, publishKey string) (bool, bool, bool) {
 	var retry, fastRetry, processNextObj bool
+	var httpPoliciesToClear []avicache.NamespaceName
 	for i := len(rest_ops) - 1; i >= 0; i-- {
 		// Go over each of the failed requests and enqueue them to the worker queue for retry.
 		if rest_ops[i].Err != nil {
@@ -710,9 +711,10 @@ func (rest *RestOperations) RefreshCacheForPartialOperation(rest_ops []*utils.Re
 					utils.AviLog.Infof("key: %s, msg: Error is not of type AviError, err: %v, %T", key, rest_ops[i].Err, rest_ops[i].Err)
 					continue
 				}
-				retryable, fastRetryable, nextObj := rest.RefreshCacheForRetryLayer(publishKey, aviObjKey, rest_ops[i], aviError, aviclient, avimodel, key, isEvh)
+				retryable, fastRetryable, nextObj, httpPolsToClr := rest.RefreshCacheForRetryLayer(publishKey, aviObjKey, rest_ops[i], aviError, aviclient, avimodel, key, isEvh)
 				retry = retry || retryable
 				processNextObj = processNextObj || nextObj
+				httpPoliciesToClear = append(httpPoliciesToClear, httpPolsToClr...)
 				if avimodel.GetRetryCounter() != 0 {
 					fastRetry = fastRetry || fastRetryable
 				} else {
@@ -749,6 +751,25 @@ func (rest *RestOperations) RefreshCacheForPartialOperation(rest_ops []*utils.Re
 			rest.PopulateOneCache(rest_ops[i], aviObjKey, key)
 		}
 	}
+
+	// Clear HTTPPolicySets from cache after all operations are processed
+	// This ensures PopulateOneCache won't re-add them
+	for _, httpPolKey := range httpPoliciesToClear {
+		// Remove from HTTPPolicyCache
+		rest.cache.HTTPPolicyCache.AviCacheDelete(httpPolKey)
+		utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from HTTPPolicyCache after batch processing", key, httpPolKey.Name)
+
+		// Also remove from VS cache's HTTPKeyCollection to prevent deletion
+		vs_cache, found := rest.cache.VsCacheMeta.AviCacheGet(aviObjKey)
+		if found {
+			vs_cache_obj, ok := vs_cache.(*avicache.AviVsCache)
+			if ok {
+				vs_cache_obj.HTTPKeyCollection = avicache.RemoveNamespaceName(vs_cache_obj.HTTPKeyCollection, httpPolKey)
+				utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from VS cache HTTPKeyCollection", key, httpPolKey.Name)
+			}
+		}
+	}
+
 	return retry, fastRetry, processNextObj
 }
 
@@ -902,11 +923,12 @@ func (rest *RestOperations) AviRestOperateWrapper(aviClient *clients.AviClient, 
 	}
 }
 
-// clearHTTPPolicySetsFromCache clears HTTPPolicySet entries from cache when they're missing on controller
-// This allows them to be recreated on retry
-func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, aviObjKey avicache.NamespaceName, key string) {
+// clearHTTPPolicySetsFromCache extracts HTTPPolicySet keys from VS object for later cache cleanup
+// Returns list of HTTPPolicySet keys that need to be cleared
+func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, aviObjKey avicache.NamespaceName, key string) []avicache.NamespaceName {
 	// Extract HTTPPolicySet references from the VS object
 	var httpPolicyRefs []*avimodels.HTTPPolicies
+	var httpPoliciesToClear []avicache.NamespaceName
 
 	switch rest_op.Obj.(type) {
 	case utils.AviRestObjMacro:
@@ -920,7 +942,7 @@ func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, 
 		httpPolicyRefs = vs.HTTPPolicies
 	}
 
-	// Clear HTTPPolicySet entries from cache so they will be recreated on retry
+	// Extract HTTPPolicySet names for later cleanup
 	for _, httpPolicy := range httpPolicyRefs {
 		if httpPolicy.HTTPPolicySetRef != nil {
 			// Extract HTTPPolicy name from ref: "/api/httppolicyset/?name=<name>"
@@ -930,32 +952,23 @@ func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, 
 				if len(parts) > 1 {
 					httpPolName := parts[1]
 					httpPolKey := avicache.NamespaceName{Namespace: aviObjKey.Namespace, Name: httpPolName}
-
-					// Remove from HTTPPolicyCache
-					rest.cache.HTTPPolicyCache.AviCacheDelete(httpPolKey)
-					utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from HTTPPolicyCache for retry", key, httpPolName)
-
-					// Also remove from VS cache's HTTPKeyCollection to prevent deletion
-					vs_cache, found := rest.cache.VsCacheMeta.AviCacheGet(aviObjKey)
-					if found {
-						vs_cache_obj, ok := vs_cache.(*avicache.AviVsCache)
-						if ok {
-							vs_cache_obj.HTTPKeyCollection = avicache.RemoveNamespaceName(vs_cache_obj.HTTPKeyCollection, httpPolKey)
-							utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from VS cache HTTPKeyCollection", key, httpPolName)
-						}
-					}
+					httpPoliciesToClear = append(httpPoliciesToClear, httpPolKey)
+					utils.AviLog.Infof("key: %s, msg: Marking HTTPPolicySet %s for cache cleanup after batch processing", key, httpPolName)
 				}
 			}
 		}
 	}
+
+	return httpPoliciesToClear
 }
 
-func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObjKey avicache.NamespaceName, rest_op *utils.RestOp, aviError session.AviError, c *clients.AviClient, avimodel *nodes.AviObjectGraph, key string, isEvh bool) (bool, bool, bool) {
+func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObjKey avicache.NamespaceName, rest_op *utils.RestOp, aviError session.AviError, c *clients.AviClient, avimodel *nodes.AviObjectGraph, key string, isEvh bool) (bool, bool, bool, []avicache.NamespaceName) {
 	var fastRetry bool
 	statuscode := aviError.HttpStatusCode
 	errorStr := aviError.Error()
 	retry := true
 	processNextObj := true
+	var httpPoliciesToClear []avicache.NamespaceName
 	utils.AviLog.Warnf("key: %s, msg: problem in processing request for: %s", key, rest_op.Model)
 	utils.AviLog.Infof("key: %s, msg: error str: %s", key, errorStr)
 	aviObjCache := avicache.SharedAviObjCache()
@@ -966,9 +979,9 @@ func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObj
 		// Handle specific 500 errors that indicate missing child objects due to race conditions
 		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "HTTPPolicySet object not found!") {
 			// The HTTPPolicySet was deleted by another concurrent operation (race condition during VS transition)
-			// Clear it from cache so on retry it will be recreated
-			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 500 due to missing HTTPPolicySet, clearing cache and will retry", key)
-			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
+			// Mark it for cache cleanup after batch processing
+			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 500 due to missing HTTPPolicySet, will clear cache and retry", key)
+			httpPoliciesToClear = rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
 		}
 	} else if statuscode >= 400 && statuscode < 499 {
 		// Will account for more error codes.*/
@@ -976,8 +989,8 @@ func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObj
 		// Handle 400 errors for missing HTTPPolicySet due to race conditions (UUID reference)
 		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "Reference to HTTPPolicySet not found") {
 			// Same race condition, but HTTPPolicySet was deleted between PUT and VS POST
-			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 400 due to missing HTTPPolicySet reference, clearing cache and will retry", key)
-			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
+			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 400 due to missing HTTPPolicySet reference, will clear cache and retry", key)
+			httpPoliciesToClear = rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
 			processNextObj = false
 		} else if statuscode == 404 {
 			// 404 means the object exists in our cache but not on the controller.
@@ -1284,7 +1297,7 @@ func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObj
 		}
 	}
 
-	return retry, fastRetry, processNextObj
+	return retry, fastRetry, processNextObj, httpPoliciesToClear
 }
 
 func ExtractStatusCode(word string) string {
