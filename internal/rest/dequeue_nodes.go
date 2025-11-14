@@ -930,9 +930,20 @@ func (rest *RestOperations) clearHTTPPolicySetsFromCache(rest_op *utils.RestOp, 
 				if len(parts) > 1 {
 					httpPolName := parts[1]
 					httpPolKey := avicache.NamespaceName{Namespace: aviObjKey.Namespace, Name: httpPolName}
-					// Remove from cache so it will be recreated on retry
+
+					// Remove from HTTPPolicyCache
 					rest.cache.HTTPPolicyCache.AviCacheDelete(httpPolKey)
-					utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from cache for retry", key, httpPolName)
+					utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from HTTPPolicyCache for retry", key, httpPolName)
+
+					// Also remove from VS cache's HTTPKeyCollection to prevent deletion
+					vs_cache, found := rest.cache.VsCacheMeta.AviCacheGet(aviObjKey)
+					if found {
+						vs_cache_obj, ok := vs_cache.(*avicache.AviVsCache)
+						if ok {
+							vs_cache_obj.HTTPKeyCollection = avicache.RemoveNamespaceName(vs_cache_obj.HTTPKeyCollection, httpPolKey)
+							utils.AviLog.Infof("key: %s, msg: Cleared HTTPPolicySet %s from VS cache HTTPKeyCollection", key, httpPolName)
+						}
+					}
 				}
 			}
 		}
