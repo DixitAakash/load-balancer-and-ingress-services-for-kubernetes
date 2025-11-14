@@ -967,21 +967,20 @@ func (rest *RestOperations) RefreshCacheForRetryLayer(parentVsKey string, aviObj
 		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "HTTPPolicySet object not found!") {
 			// The HTTPPolicySet was deleted by another concurrent operation (race condition during VS transition)
 			// Clear it from cache so on retry it will be recreated
+			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 500 due to missing HTTPPolicySet, clearing cache and will retry", key)
 			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
 		}
 	} else if statuscode >= 400 && statuscode < 499 {
-		// Handle 400 errors that may result from retry attempts where cache is stale
-		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "HTTPPolicySet object not found!") {
-			// Same race condition, but on retry attempt - clear cache and retry again
-			utils.AviLog.Warnf("key: %s, msg: VS POST failed on retry due to missing HTTPPolicySet, clearing cache", key)
-			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
-			fastRetry = true
-			processNextObj = false
-		}
 		// Will account for more error codes.*/
 		fastRetry = true
-		// 404 means the object exists in our cache but not on the controller.
-		if statuscode == 404 {
+		// Handle 400 errors for missing HTTPPolicySet due to race conditions (UUID reference)
+		if rest_op.Model == "VirtualService" && strings.Contains(errorStr, "Reference to HTTPPolicySet not found") {
+			// Same race condition, but HTTPPolicySet was deleted between PUT and VS POST
+			utils.AviLog.Warnf("key: %s, msg: VS POST failed with 400 due to missing HTTPPolicySet reference, clearing cache and will retry", key)
+			rest.clearHTTPPolicySetsFromCache(rest_op, aviObjKey, key)
+			processNextObj = false
+		} else if statuscode == 404 {
+			// 404 means the object exists in our cache but not on the controller.
 			switch rest_op.Model {
 			case "Pool":
 				var poolObjName string
